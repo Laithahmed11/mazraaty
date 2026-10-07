@@ -1,0 +1,30 @@
+import {test,expect} from 'bun:test';
+import {Database} from 'bun:sqlite';
+import {readFileSync} from 'node:fs';
+import {handleShared,type SharedEnv} from '../src/lib/shared-api.server';
+class DB{
+ raw=new Database(':memory:');constructor(){for(const f of ['0001_shared_mazraaty.sql','0002_booking_periods.sql','0003_phone_accounts.sql'])this.raw.exec(readFileSync('migrations/'+f,'utf8'));}
+ prepare(sql:string){const db=this;let args:unknown[]=[];return {bind(...v:unknown[]){args=v;return this;},async first(){return db.raw.prepare(sql).get(...args as any[]);},async all(){return {results:db.raw.prepare(sql).all(...args as any[])};},async run(){return {meta:{changes:db.raw.prepare(sql).run(...args as any[]).changes}};}};}
+ async batch(statements:any[]){this.raw.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());this.raw.exec('COMMIT');return out;}catch(e){this.raw.exec('ROLLBACK');throw e;}}
+}
+test('verified identity protects bookings, survives device change, cannot spoof phone, revokes sessions',async()=>{
+ const db=new DB(),env={DB:db,ADMIN_PASSWORD:'test-admin-password-long',TWILIO_ACCOUNT_SID:'AC'+'a'.repeat(32),TWILIO_AUTH_TOKEN:'not-a-real-secret',TWILIO_VERIFY_SERVICE_SID:'VA'+'b'.repeat(32)} as unknown as SharedEnv;
+ const origin='https://test.mazraaty.invalid',original=globalThis.fetch;let providerCalls=0;
+ globalThis.fetch=(async(url:any,init:any)=>{expect(String(url).startsWith('https://verify.twilio.com/v2/Services/VA')).toBe(true);providerCalls++;const p=new URLSearchParams(init.body);if(String(url).endsWith('/Verifications')){expect(p.has('CustomFriendlyName')).toBe(false);return Response.json({status:'pending'});}return Response.json({status:p.get('Code')==='123456'?'approved':'pending'});}) as typeof fetch;
+ async function call(path:string,method='GET',value?:unknown,cookie='',token='a'.repeat(64)){const r=await handleShared(new Request(origin+'/api/v2/'+path,{method,headers:{Origin:origin,'CF-Connecting-IP':'127.0.0.1',Cookie:cookie,'X-Device-Token':token},body:value===undefined?undefined:JSON.stringify(value)}),env);return {r,data:await r.json() as any,cookie:r.headers.get('set-cookie')?.split(';')[0]||''};}
+ async function sign(phone:string,token='a'.repeat(64)){const start=await call('account/start','POST',{phone},'',token);expect(start.r.status).toBe(200);const checked=await call('account/check','POST',{code:'123456'},start.cookie,token);expect(checked.r.status).toBe(200);return checked.cookie;}
+ try{
+ expect((await call('account/status')).data.authenticated).toBe(false);expect((await call('bookings')).r.status).toBe(401);expect((await call('bookings','POST',{})).r.status).toBe(401);
+ const start=await call('account/start','POST',{phone:'07700000000'});expect(start.data.phone).toBe('+9647700000000');expect((await call('account/check','POST',{code:'000000'},start.cookie)).r.status).toBe(400);
+ const a=await call('account/check','POST',{code:'123456'},start.cookie);expect(a.r.status).toBe(200);expect(a.r.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Strict');expect((await call('account/check','POST',{code:'123456'},start.cookie)).r.status).toBe(401);
+ const owner=await call('login','POST',{password:env.ADMIN_PASSWORD}),farm=(await call('owner/farms','POST',{name:'مزرعة اختبار',region:'بغداد',area:'اختبار',description:'اختبار',price:100000,capacity:10,amenities:'',images:['/assets/standalone-farm.svg'],published:true},owner.cookie)).data.farm;
+ const booking={farmId:farm.id,date:new Date(Date.now()+20*86400000).toISOString().slice(0,10),period:'morning',guests:2,name:'اختبار',phone:'07711111111',notes:'',requestId:crypto.randomUUID()};
+ const saved=await call('bookings','POST',booking,a.cookie);expect(saved.r.status).toBe(201);expect(saved.data.booking.phone).toBe('+9647700000000');
+ const same=await sign('07700000000','b'.repeat(64));expect((await call('bookings','GET',undefined,same,'b'.repeat(64))).data.bookings[0].id).toBe(saved.data.booking.id);
+ const other=await sign('07722222222','c'.repeat(64));expect((await call('bookings','GET',undefined,other)).data.bookings).toEqual([]);expect((await call('bookings/'+saved.data.booking.id+'/cancel','POST',{},other)).r.status).toBe(404);expect((await call('owner/farms','POST',{},same)).r.status).toBe(401);
+ await call('account/logout','POST',{},a.cookie);expect((await call('bookings','GET',undefined,a.cookie)).r.status).toBe(401);expect((await call('bookings','GET',undefined,same)).r.status).toBe(200);
+ await call('device','DELETE',undefined,same);expect((await call('bookings','GET',undefined,same)).r.status).toBe(401);expect(db.raw.query('SELECT count(*) AS n FROM customers WHERE phone=?').get('+9647700000000')).toEqual({n:0});
+ const before=providerCalls;for(let i=0;i<3;i++)await call('account/start','POST',{phone:'07733333333'});expect((await call('account/start','POST',{phone:'07733333333'})).r.status).toBe(429);expect(providerCalls-before).toBe(3);
+ const badOrigin=await handleShared(new Request(origin+'/api/v2/account/start',{method:'POST',headers:{Origin:'https://evil.invalid'},body:JSON.stringify({phone:'07744444444'})}),env);expect(badOrigin.status).toBe(403);
+ }finally{globalThis.fetch=original;db.raw.close();}
+});

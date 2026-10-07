@@ -1,0 +1,8 @@
+// Replace only the public HTTPS service URL. Wix secrets belong exclusively on the server.
+// The slash split below prevents xcconfig from treating // as a comment.
+MAZRAATY_API_BASE_URL = https:/$()/replace-with-higgsfield-domain.example
+PRODUCT_BUNDLE_IDENTIFIER = com.mazraaty.ios
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 5.0
