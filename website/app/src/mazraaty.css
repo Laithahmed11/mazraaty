@@ -429,3 +429,70 @@ html:has(.mz-app:not(.mz-owner)),body:has(.mz-app:not(.mz-owner)){background:#f5
 .mz-app:not(.mz-owner) .mz-farm-body>.mz-row:last-child>span{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .mz-app:not(.mz-owner) .mz-farm-body .mz-secondary{padding:0 18px}
 .mz-app:not(.mz-owner) .mz-farm-body .mz-icon{width:42px;height:42px;min-height:42px}
+
+/* ==========================================================================
+   Polish v3 — customer page only. Geometric Mesopotamian pattern, ranked
+   most-booked cards, ornamented headings, softer depth and motion.
+   ========================================================================== */
+.mz-app:not(.mz-owner){
+ --mz-pattern:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56' fill='none' stroke='%23fff' stroke-width='1'%3E%3Cpath d='M28 4 52 28 28 52 4 28Z'/%3E%3Cpath d='M28 16 40 28 28 40 16 28Z'/%3E%3Ccircle cx='28' cy='28' r='3'/%3E%3C/svg%3E");
+ --mz-pattern-dark:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56' fill='none' stroke='%23b97d1a' stroke-width='1'%3E%3Cpath d='M28 4 52 28 28 52 4 28Z'/%3E%3Cpath d='M28 16 40 28 28 40 16 28Z'/%3E%3Ccircle cx='28' cy='28' r='3'/%3E%3C/svg%3E");
+ counter-reset:mz-rank
+}
+
+/* Hero: pattern veil + cream-to-honey headline + glowing hairline */
+.mz-app:not(.mz-owner) .mz-discover::before{content:"";position:absolute;inset:0;z-index:0;background:var(--mz-pattern);opacity:.07;-webkit-mask:linear-gradient(0deg,#000 0,#0000 70%);mask:linear-gradient(0deg,#000 0,#0000 70%);pointer-events:none}
+.mz-app:not(.mz-owner) .mz-discover-copy{z-index:2}
+.mz-app:not(.mz-owner) .mz-discover h1{background:linear-gradient(180deg,#fffaf0 30%,#f6d9a0);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;text-shadow:none;filter:drop-shadow(0 4px 22px #0b3b3577)}
+.mz-app:not(.mz-owner) .mz-discover .mz-eyebrow{padding:7px 14px 7px 16px;border:1px solid #f0b24a55;border-radius:999px;background:#f0b24a1f;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.mz-app:not(.mz-owner) .mz-discover .mz-eyebrow::before{display:none}
+.mz-app:not(.mz-owner) .mz-discover .mz-primary{box-shadow:0 14px 34px #f0b24a55,inset 0 1px 0 #fff6}
+.mz-app:not(.mz-owner) .mz-discover .mz-primary::after{content:"";display:inline-block;width:0}
+
+/* Ornamented section labels */
+.mz-app:not(.mz-owner) .mz-eyebrow::before{width:7px;height:7px;background:var(--mz-honey-deep);transform:rotate(45deg);border-radius:1px;box-shadow:12px 0 0 -2px #d08a1e66}
+.mz-app:not(.mz-owner) .mz-results-heading h2{letter-spacing:-.2px}
+
+/* Pattern in the most-booked panel */
+.mz-app:not(.mz-owner) .mz-popular{position:relative;overflow:hidden}
+.mz-app:not(.mz-owner) .mz-popular::before{content:"";position:absolute;inset:0;background:var(--mz-pattern-dark);opacity:.07;-webkit-mask:linear-gradient(200deg,#000 0,#0000 55%);mask:linear-gradient(200deg,#000 0,#0000 55%);pointer-events:none}
+.mz-app:not(.mz-owner) .mz-popular>*{position:relative}
+
+/* Ranked cards: 1 2 3 in Arabic-Indic digits */
+.mz-app:not(.mz-owner) .mz-popular .mz-grid{counter-reset:mz-rank}
+.mz-app:not(.mz-owner) .mz-popular .mz-farm{counter-increment:mz-rank}
+.mz-app:not(.mz-owner) .mz-popular .mz-photo::before{content:counter(mz-rank,arabic-indic);position:absolute;z-index:2;bottom:38px;left:16px;min-width:40px;height:40px;padding:0 10px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(160deg,#f7c564,#d08a1e);color:#2a1a04;font:700 20px/1 var(--mz-display);box-shadow:0 8px 18px #d08a1e66,inset 0 1px 0 #fff8}
+
+/* Cards: softer depth, honey hairline, price as a pill */
+.mz-app:not(.mz-owner) .mz-farm{box-shadow:0 1px 2px #102a270d,0 10px 24px #102a270f,0 28px 60px #102a2710}
+.mz-app:not(.mz-owner) .mz-farm-body{box-shadow:0 -14px 24px -12px #102a2714}
+.mz-app:not(.mz-owner) .mz-farm-body>.mz-row:last-child{border-top:0;padding-top:6px;position:relative}
+.mz-app:not(.mz-owner) .mz-farm-body>.mz-row:last-child::before{content:"";position:absolute;top:-6px;inset-inline:0;height:1px;background:linear-gradient(90deg,#d08a1e00,#d08a1e66,#d08a1e00)}
+.mz-app:not(.mz-owner) .mz-farm-body strong{display:inline-flex;align-items:baseline;gap:6px;padding:7px 14px;border-radius:14px;background:#f8ead0;color:#5b3a0c;font-size:18px}
+.mz-app:not(.mz-owner) .mz-farm-body strong small{color:#87531a}
+.mz-app:not(.mz-owner) .mz-farm-body p{color:var(--mz-muted);letter-spacing:.1px}
+.mz-app:not(.mz-owner) .mz-tag{font-weight:700}
+
+/* Account strip: small badge-like icon plate */
+.mz-app:not(.mz-owner) .mz-account-strip{position:relative;overflow:hidden}
+.mz-app:not(.mz-owner) .mz-account-strip::after{content:"";position:absolute;inset-block:0;inset-inline-end:-30px;width:140px;background:var(--mz-pattern-dark);opacity:.09;-webkit-mask:linear-gradient(270deg,#000,#0000);mask:linear-gradient(270deg,#000,#0000);pointer-events:none}
+
+/* Bottom nav: soft glow under the active tab */
+.mz-app:not(.mz-owner) .mz-bottom-nav button[aria-current]{box-shadow:0 8px 22px #f0b24a55,inset 0 1px 0 #fff7}
+.mz-app:not(.mz-owner) .mz-bottom-nav{box-shadow:0 2px 8px #0b3b3540,0 24px 50px #0b3b3570,inset 0 1px 0 #ffffff1f}
+
+/* Honey focus ring, gentle staggered entrance */
+.mz-app:not(.mz-owner) :is(button,a,input,select,textarea):focus-visible{outline:3px solid var(--mz-honey);outline-offset:3px}
+.mz-app:not(.mz-owner) .mz-discover{animation:mz-lux-in .7s var(--mz-ease) both}
+.mz-app:not(.mz-owner) .mz-popular .mz-farm:nth-child(2){animation-delay:.08s}
+.mz-app:not(.mz-owner) .mz-popular .mz-farm:nth-child(3){animation-delay:.16s}
+
+/* Dialog + calendar finishing */
+.mz-app:not(.mz-owner) .mz-dialog>header h2{font-size:26px}
+.mz-app:not(.mz-owner) .mz-bookbar>strong{color:var(--mz-palm)}
+.mz-app:not(.mz-owner) .mz-days button[aria-pressed=true]{background:linear-gradient(160deg,#145c50,#0b3b35)}
+.mz-app:not(.mz-owner) .mz-calendar{box-shadow:0 10px 30px #102a270d}
+.mz-app:not(.mz-owner) .mz-farm-body strong{white-space:nowrap;padding:6px 12px;font-size:16px;gap:4px}
+.mz-app:not(.mz-owner) .mz-farm-body strong small{font-size:11px;white-space:nowrap}
+.mz-app:not(.mz-owner) .mz-discover .mz-eyebrow{background:#0b3b35b3;border-color:#f0b24a80}
+.mz-app:not(.mz-owner) .mz-discover-image::after{background:linear-gradient(180deg,#0b3b3599 0%,#0b3b3516 26%,#0b3b35c4 62%,#082b27 100%)}
