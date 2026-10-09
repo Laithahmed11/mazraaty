@@ -13,7 +13,7 @@ import java.util.HashMap;
 
 /** Test build. Shared data is stored on the HTTPS service, never in Wix. */
 public class MainActivity extends Activity {
- private static final String HOST="mazraaty-iraq.higgsfield.app";
+ private static final String HOST="mazraati.laithlaith500.workers.dev";
  private static final String START_PATH="/customer";
  private static final boolean OWNER=false;
  private static final int PICK_IMAGE=410;
@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
   if("tel".equals(uri.getScheme())||"mailto".equals(uri.getScheme())){try{startActivity(new Intent(Intent.ACTION_VIEW,uri));}catch(Exception e){Toast.makeText(this,"ماكو تطبيق مناسب لهذا الرابط",Toast.LENGTH_SHORT).show();}}
   else{showFailure();}return true;
  }
- private void showFailure(){runOnUiThread(()->{if(failed)return;failed=true;failure=new LinearLayout(this);failure.setOrientation(LinearLayout.VERTICAL);failure.setGravity(android.view.Gravity.CENTER);failure.setPadding(35,35,35,35);failure.setBackgroundColor(Color.rgb(243,245,250));TextView text=new TextView(this);text.setText("تعذر فتح مزرعتي.\nتحقق من الإنترنت. إذا الخدمة تطلب حساب هكسفيلد، تحتاج تفعيل وصول الزبائن على الاستضافة أولاً.");text.setTextSize(18);text.setTextColor(Color.rgb(26,36,64));text.setGravity(android.view.Gravity.CENTER);failure.addView(text);Button retry=new Button(this);retry.setText("حاول مجدداً");retry.setOnClickListener(v->web.loadUrl("https://"+HOST+START_PATH));failure.addView(retry);frame.addView(failure,new FrameLayout.LayoutParams(-1,-1));});}
+ private void showFailure(){runOnUiThread(()->{if(failed)return;failed=true;failure=new LinearLayout(this);failure.setOrientation(LinearLayout.VERTICAL);failure.setGravity(android.view.Gravity.CENTER);failure.setPadding(35,35,35,35);failure.setBackgroundColor(Color.rgb(243,245,250));TextView text=new TextView(this);text.setText("تعذر فتح مزرعتي.\nتحقق من الإنترنت ثم حاول مجدداً.");text.setTextSize(18);text.setTextColor(Color.rgb(26,36,64));text.setGravity(android.view.Gravity.CENTER);failure.addView(text);Button retry=new Button(this);retry.setText("حاول مجدداً");retry.setOnClickListener(v->web.loadUrl("https://"+HOST+START_PATH));failure.addView(retry);frame.addView(failure,new FrameLayout.LayoutParams(-1,-1));});}
  @Override protected void onActivityResult(int code,int result,Intent data){super.onActivityResult(code,result,data);if(code==PICK_IMAGE&&fileCallback!=null){Uri uri=result==RESULT_OK&&data!=null?data.getData():null;fileCallback.onReceiveValue(uri==null?null:new Uri[]{uri});fileCallback=null;}}
  @Override public void onBackPressed(){if(failure!=null){super.onBackPressed();return;}web.evaluateJavascript("(function(){var d=document.querySelector('dialog[open]');if(d){d.dispatchEvent(new Event('cancel',{cancelable:true}));return true;}return false;})()",value->{if("true".equals(value))return;if(web.canGoBack())web.goBack();else MainActivity.super.onBackPressed();});}
  @Override protected void onDestroy(){if(fileCallback!=null){fileCallback.onReceiveValue(null);fileCallback=null;}if(web!=null){web.stopLoading();web.destroy();}super.onDestroy();}
