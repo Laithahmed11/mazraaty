@@ -72,7 +72,7 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
    return fail(404,"not_found","المسار غير موجود.");
   }
   if(/^photos\/[a-f0-9-]{36}\.(jpg|png|webp)$/.test(path)&&method==="GET"){
-   const key=path.slice(7),publicRow=await db.prepare("SELECT id FROM farms WHERE published=1 AND images LIKE ? LIMIT 1").bind('%"'+"/api/v2/photos/"+key+'"%').first();if(!publicRow)await admin(request,env);
+   const key=path.slice(7),publicRow=await db.prepare("SELECT id FROM farms WHERE published=1 AND EXISTS (SELECT 1 FROM json_each(farms.images) AS photo WHERE photo.value=?) LIMIT 1").bind("/api/v2/photos/"+key).first();if(!publicRow)await admin(request,env);
    const object=await env.STORAGE?.get(key);if(!object)return fail(404,"not_found","الصورة غير موجودة.");return new Response(object.body as unknown as BodyInit,{headers:{"Content-Type":object.httpMetadata?.contentType||"image/jpeg","Cache-Control":publicRow?"public,max-age=300":"no-store"}});
   }
   if(path==="unavailable"&&method==="GET"){const id=identifier(url.searchParams.get("farmId")||""),selected=url.searchParams.get("period");if(selected)period(selected);const rows=await db.prepare("SELECT date,period FROM reserved_dates WHERE farm_id=? AND date>=? ORDER BY date,period").bind(id,today()).all<{date:string;period:string}>();const slots=rows.results;const dates=selected?slots.filter(r=>r.period===selected).map(r=>r.date):Array.from(new Set(slots.map(r=>r.date))).filter(d=>slots.filter(r=>r.date===d).length===2);return response({dates,slots});}
@@ -91,6 +91,5 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
   if(/^bookings\/[a-zA-Z0-9-]+\/cancel$/.test(path)&&method==="POST"){const hash=await device(request,db),id=identifier(path.split("/")[1]);await db.batch([db.prepare("UPDATE bookings SET status='cancelled' WHERE id=? AND device_hash=? AND status IN ('pending','confirmed')").bind(id,hash),db.prepare("DELETE FROM reserved_dates WHERE booking_id=? AND EXISTS(SELECT 1 FROM bookings WHERE id=? AND device_hash=? AND status='cancelled')").bind(id,id,hash)]);const row=await db.prepare("SELECT * FROM bookings WHERE id=? AND device_hash=?").bind(id,hash).first<BookingRow>();if(!row)return fail(404,"not_found","الطلب غير موجود على هذا الجهاز.");return response({booking:bookingJSON(row)});}
   if(path==="device"&&method==="DELETE"){const hash=await device(request,db,true);await db.batch([db.prepare("UPDATE devices SET revoked=1 WHERE hash=?").bind(hash),db.prepare("UPDATE bookings SET customer_name='',phone='',notes='',device_hash='erased:'||id WHERE device_hash=? AND status='confirmed'").bind(hash),db.prepare("DELETE FROM bookings WHERE device_hash=? AND status!='confirmed'").bind(hash)]);return response({deleted:true});}
   return fail(404,"not_found","المسار غير موجود.");
- }catch(e){if(e instanceof Problem)return response({error:{code:e.code,message:e.message},message:e.message},e.status);return response({error:{code:"service_error",message:"تعذر تنفيذ العملية. حاول مجدداً بعد قليل."}},503);}
+ }catch(e){if(e instanceof Problem)return response({error:{code:e.code,message:e.message},message:e.message},e.status);console.error("Mazraaty service failure",e);return response({error:{code:"service_error",message:"تعذر تنفيذ العملية. حاول مجدداً بعد قليل."}},503);}
 }
-

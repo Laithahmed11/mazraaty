@@ -8,6 +8,14 @@
   ],
   "scripts": {
     "dev": "vite dev",
+    "dev:worker": "wrangler dev --local",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "cf:configure": "node scripts/configure-cloudflare.mjs",
+    "cf:dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
+    "db:remote": "wrangler d1 migrations apply DB --remote --config wrangler.deploy.jsonc",
+    "deploy": "wrangler deploy --config wrangler.deploy.jsonc",
+    "test:product": "bun test tests/shared-service.test.ts tests/customer-auth.test.ts tests/security-headers.test.ts tests/cloudflare-storage.test.ts",
+    "test:worker": "node scripts/smoke-worker.mjs",
     "dev:design": "HF_DESIGN_INSPECTOR=1 vite dev --mode design",
     "build": "bun run check:ui && tsr generate && tsc --noEmit && vite build",
     "build:dev": "vite build --mode development",
@@ -55,6 +63,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "wrangler": "4.148.0",
     "@cloudflare/workers-types": "^5.20260708.1",
     "@eslint/js": "^10.0.1",
     "@tanstack/router-cli": "^1.167.18",

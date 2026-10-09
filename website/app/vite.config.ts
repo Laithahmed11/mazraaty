@@ -89,9 +89,8 @@ export default defineConfig(({ command, mode }) => {
       //
       // SSR build: `vite build` emits a Workers-shaped server bundle
       // (dist/server/server.js — `export default { fetch }`) plus dist/client
-      // (hashed static assets). The platform publishes that as a per-tenant
-      // Worker on Workers for Platforms, served at <sub>.higgsfield.app/ (host
-      // root, so Vite's default base "/" — no base-path juggling).
+      // (hashed static assets). Wrangler deploys these directly to the new
+      // independent Worker at its host root (Vite base "/").
       //
       // Rendering happens on the server per request, so site code must be
       // SSR-safe: never touch browser-only globals (window, document,

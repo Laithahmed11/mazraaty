@@ -9,3 +9,7 @@
 --   title TEXT NOT NULL,
 --   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 -- );
+
+-- Executable no-op: Wrangler/Bun reject a comments-only migration on a fresh DB.
+-- No tables, application rows or existing production data are changed.
+SELECT 1;
