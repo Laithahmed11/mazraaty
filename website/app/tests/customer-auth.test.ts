@@ -7,6 +7,22 @@ class DB{
  prepare(sql:string){const db=this;let args:unknown[]=[];return {bind(...v:unknown[]){args=v;return this;},async first(){return db.raw.prepare(sql).get(...args as any[]);},async all(){return {results:db.raw.prepare(sql).all(...args as any[])};},async run(){return {meta:{changes:db.raw.prepare(sql).run(...args as any[]).changes}};}};}
  async batch(statements:any[]){this.raw.exec('BEGIN');try{const out=[];for(const s of statements)out.push(await s.run());this.raw.exec('COMMIT');return out;}catch(e){this.raw.exec('ROLLBACK');throw e;}}
 }
+test('independent deployment blocks device fallback while phone configuration is missing',async()=>{
+ const db=new DB(),env={DB:db,REQUIRE_PHONE_AUTH:'true'} as unknown as SharedEnv;
+ const origin='https://test.mazraaty.invalid';
+ try{
+ const status=await handleShared(new Request(origin+'/api/v2/account/status'),env);
+ expect(await status.json()).toEqual({enabled:true,authenticated:false,phone:''});
+ for(const [path,method] of [['bookings','GET'],['bookings','POST'],['device','DELETE'],['bookings/test-id/cancel','POST'],['account/start','POST']]){
+ const r=await handleShared(new Request(origin+'/api/v2/'+path,{method,headers:{Origin:origin,'X-Device-Token':'a'.repeat(64)},...(method==='POST'?{body:'{}'}:{})}),env);
+ expect(r.status).toBe(503);
+ }
+ expect(db.raw.query('SELECT count(*) AS n FROM customers').get()).toEqual({n:0});
+ expect(db.raw.query('SELECT count(*) AS n FROM bookings').get()).toEqual({n:0});
+ expect((await handleShared(new Request(origin+'/api/v2/catalog'),env)).status).toBe(200);
+ }finally{db.raw.close();}
+});
+
 test('verified identity protects bookings, survives device change, cannot spoof phone, revokes sessions',async()=>{
  const db=new DB(),env={DB:db,ADMIN_PASSWORD:'test-admin-password-long',TWILIO_ACCOUNT_SID:'AC'+'a'.repeat(32),TWILIO_AUTH_TOKEN:'not-a-real-secret',TWILIO_VERIFY_SERVICE_SID:'VA'+'b'.repeat(32)} as unknown as SharedEnv;
  const origin='https://test.mazraaty.invalid',original=globalThis.fetch;let providerCalls=0;

@@ -20,7 +20,7 @@ export async function withCustomerAuth(request:Request,env:SharedEnv,core:(r:Req
  if(!env.DB)return core(request,env);
  if(path.startsWith('account/')){
  if(method!=='GET'&&request.headers.get('Origin')!==new URL(request.url).origin)return error(403,'افتح الطلب من التطبيق الرسمي.');
- if(path==='account/status'&&method==='GET'){const c=phoneAuthReady(env)?await customer(request,env):null;return result({enabled:phoneAuthReady(env),authenticated:!!c,phone:c?.phone||''});}
+ if(path==='account/status'&&method==='GET'){const c=phoneAuthReady(env)?await customer(request,env):null;return result({enabled:phoneAuthReady(env)||env.REQUIRE_PHONE_AUTH==='true',authenticated:!!c,phone:c?.phone||''});}
  if(!phoneAuthReady(env))return error(503,'تسجيل الهاتف قيد التجهيز.');
  if(path==='account/start'&&method==='POST'){
  const value=await input(request),phone=normalize(value.phone),ip=request.headers.get('CF-Connecting-IP')||'unknown';
@@ -44,8 +44,9 @@ export async function withCustomerAuth(request:Request,env:SharedEnv,core:(r:Req
  if(path==='account/logout'&&method==='POST'){const token=getCookie(request,'mazraaty_customer');if(token)await env.DB.prepare('DELETE FROM customer_sessions WHERE id=?').bind(await hash(token)).run();return result({signedOut:true},200,cookie('mazraaty_customer','',0));}
  return error(404,'المسار غير موجود.');
  }
- // Existing device-only behavior remains until provider secrets are configured.
- if(phoneAuthReady(env)&&(path==='bookings'||path==='device'||/^bookings\/[a-zA-Z0-9-]+\/cancel$/.test(path))){
+ // Independent deployments never fall back to unverified device accounts.
+ if((phoneAuthReady(env)||env.REQUIRE_PHONE_AUTH==='true')&&(path==='bookings'||path==='device'||/^bookings\/[a-zA-Z0-9-]+\/cancel$/.test(path))){
+ if(!phoneAuthReady(env))return error(503,'تسجيل الهاتف قيد التجهيز.');
  const c=await customer(request,env);if(!c)return error(401,'سجل الدخول برقم هاتفك حتى تشوف حجوزاتك أو ترسل طلباً.');const headers=new Headers(request.headers);headers.set('X-Device-Token',c.booking_token);let payload:string|undefined;
  if(path==='bookings'&&method==='POST'){const value=await input(request);value.phone=c.phone;payload=JSON.stringify(value);headers.delete('Content-Length');}
  const forwarded=new Request(request,{headers,...(payload!==undefined?{body:payload}:{})});const r=await core(forwarded,env);

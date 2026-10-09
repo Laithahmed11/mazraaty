@@ -89,10 +89,19 @@ customers. Configure `ADMIN_PASSWORD` (unique, at least 16 characters) and
 `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` on the new
 Worker via its settings or `wrangler secret put NAME --config wrangler.deploy.jsonc`.
 Never place their values in GitHub source or public `VITE_*` variables. Verified
-phone sign-in needs all Twilio values; absent credentials retain the legacy
-device mode and must not be presented as verified phone sign-in. Payments remain
+phone sign-in needs all Twilio values; the generated independent deployment
+blocks customer account and booking actions until they are configured. Payments remain
 disabled. No Android/iOS wrapper URLs or current production traffic are switched
 in this phase.
+
+The generated independent deployment config sets `REQUIRE_PHONE_AUTH=true`.
+It blocks booking, cancellation and device-account requests with HTTP 503 if
+Twilio credentials are missing, rather than allowing unverified device accounts.
+For an authorized first deployment from this computer, fill the ignored
+`.dev.vars` privately, run `node scripts/prepare-cloudflare-secrets.mjs` to
+validate the Verify service without sending an SMS, then deploy with
+`wrangler deploy --config wrangler.deploy.jsonc --secrets-file .wrangler/deploy-secrets.json`.
+The ignored JSON file contains real secrets; never print, attach or commit it.
 
 References: [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/),
 [R2 bindings](https://developers.cloudflare.com/r2/api/workers/workers-api-usage/),
