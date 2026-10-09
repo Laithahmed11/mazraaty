@@ -23,6 +23,44 @@ test('independent deployment blocks device fallback while phone configuration is
  }finally{db.raw.close();}
 });
 
+test('demo login is isolated by environment and hostname, restricts identity and never calls Twilio',async()=>{
+ const db=new DB(),env={DB:db,REQUIRE_PHONE_AUTH:'true',APP_ENV:'preview',DEMO_AUTH_HOST:'preview.mazraaty.invalid',DEMO_AUTH_PHONE:'+9647700000000',DEMO_AUTH_CODE:'654321',ADMIN_PASSWORD:'test-preview-admin-password'} as unknown as SharedEnv;
+ const origin='https://preview.mazraaty.invalid',original=globalThis.fetch;let calls=0;
+ globalThis.fetch=(async()=>{calls++;throw Error('Demo must not contact Twilio');}) as typeof fetch;
+ const call=async(path:string,method='GET',value?:unknown,cookie='',override=env,host=origin)=>{
+  const r=await handleShared(new Request(host+'/api/v2/'+path,{method,headers:{Origin:host,Cookie:cookie},...(value===undefined?{}:{body:JSON.stringify(value)})}),override);
+  return {r,data:await r.json() as any,cookie:r.headers.get('set-cookie')?.split(';')[0]||''};
+ };
+ try{
+ for(const override of [{...env,APP_ENV:'production'},{...env,DEMO_AUTH_CODE:undefined},{...env,DEMO_AUTH_PHONE:undefined},{...env,DEMO_AUTH_HOST:'other.invalid'}]){
+  expect((await call('account/start','POST',{phone:'07700000000'},'',override)).r.status).toBe(503);
+ }
+ expect((await call('account/start','POST',{phone:'07700000000'},'',env,'https://production.mazraaty.invalid')).r.status).toBe(503);
+ expect((await call('account/start','POST',{phone:'07711111111'})).r.status).toBe(400);
+ expect((await call('bookings')).r.status).toBe(401);
+ const start=await call('account/start','POST',{phone:'07700000000'});
+ expect(start.r.status).toBe(200);expect(start.data.demo).toBe(true);expect(start.data.sent).toBe(false);
+ expect(JSON.stringify(start.data)).not.toContain(env.DEMO_AUTH_CODE!);
+ expect((await call('account/check','POST',{code:'000000'},start.cookie)).r.status).toBe(400);
+ const signed=await call('account/check','POST',{code:env.DEMO_AUTH_CODE},start.cookie);
+ expect(signed.r.status).toBe(200);expect(signed.r.headers.get('set-cookie')).toContain('HttpOnly; Secure; SameSite=Strict');
+ const status=await call('account/status','GET',undefined,signed.cookie);expect(status.data.demo).toBe(true);expect(status.data.authenticated).toBe(true);
+ expect((await call('account/check','POST',{code:env.DEMO_AUTH_CODE},start.cookie)).r.status).toBe(401);
+ expect((await call('owner/farms','POST',{},signed.cookie)).r.status).toBe(401);
+ const owner=await call('login','POST',{password:env.ADMIN_PASSWORD});
+ const farm=(await call('owner/farms','POST',{name:'مزرعة تجربة',region:'بغداد',area:'تجربة',description:'تجربة فقط',price:100000,eveningPrice:150000,capacity:10,amenities:'',images:['/assets/standalone-farm.svg'],published:true},owner.cookie)).data.farm;
+ const booking={farmId:farm.id,date:new Date(Date.now()+20*86400000).toISOString().slice(0,10),guests:2,name:'تجربة',phone:'07711111111',notes:''};
+ for(const period of ['morning','evening']){
+  const r=await call('bookings','POST',{...booking,period,requestId:crypto.randomUUID()},signed.cookie);expect(r.r.status).toBe(201);expect(r.data.booking.phone).toBe(env.DEMO_AUTH_PHONE);
+  expect((await call('owner/bookings/'+r.data.booking.id,'PATCH',{status:'confirmed'},owner.cookie)).r.status).toBe(200);
+  expect((await call('bookings','POST',{...booking,period,requestId:crypto.randomUUID()},signed.cookie)).r.status).toBe(409);
+ }
+ expect((await call('bookings','GET',undefined,signed.cookie)).data.bookings.length).toBe(2);
+ await call('account/logout','POST',{},signed.cookie);expect((await call('bookings','GET',undefined,signed.cookie)).r.status).toBe(401);
+ expect(calls).toBe(0);
+ }finally{globalThis.fetch=original;db.raw.close();}
+});
+
 test('verified identity protects bookings, survives device change, cannot spoof phone, revokes sessions',async()=>{
  const db=new DB(),env={DB:db,ADMIN_PASSWORD:'test-admin-password-long',TWILIO_ACCOUNT_SID:'AC'+'a'.repeat(32),TWILIO_AUTH_TOKEN:'not-a-real-secret',TWILIO_VERIFY_SERVICE_SID:'VA'+'b'.repeat(32)} as unknown as SharedEnv;
  const origin='https://test.mazraaty.invalid',original=globalThis.fetch;let providerCalls=0;

@@ -1,6 +1,6 @@
 import {withCustomerAuth} from "./customer-auth.server";
 import type {D1Database,R2Bucket} from "@cloudflare/workers-types";
-export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string};
+export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string;APP_ENV?:string;DEMO_AUTH_HOST?:string;DEMO_AUTH_PHONE?:string;DEMO_AUTH_CODE?:string};
 class Problem extends Error{constructor(public status:number,public code:string,message:string){super(message);}}
 const fail=(status:number,code:string,message:string):never=>{throw new Problem(status,code,message);};
 const digest=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,"0")).join("");

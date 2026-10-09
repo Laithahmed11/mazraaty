@@ -106,3 +106,27 @@ The ignored JSON file contains real secrets; never print, attach or commit it.
 References: [D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/),
 [R2 bindings](https://developers.cloudflare.com/r2/api/workers/workers-api-usage/),
 [D1 pattern limits](https://developers.cloudflare.com/d1/platform/limits/).
+
+## Isolated demo preview (no SMS)
+
+The user-authorized demo runs on `mazraati-preview` with separate D1
+`mazraaty-preview-db` and private R2 `mazraaty-preview-photos`. No launch database
+or Higgsfield data is imported. Only the synthetic account `07700000000` may
+sign in using an owner-held six-digit demo code. This does not verify ownership
+of a real phone number. The UI labels the environment and login as a demo.
+
+Set `CLOUDFLARE_PREVIEW_D1_DATABASE_ID` to the NEW preview UUID, then run
+`node scripts/configure-cloudflare-preview.mjs`. It generates ignored
+`wrangler.preview.jsonc`, `.wrangler/preview-secrets.json` and the private user
+handoff file `.wrangler/preview-access.local` without printing secret values.
+Build with `VITE_APP_ENV=preview`, apply migrations using
+`wrangler d1 migrations apply DB --remote --config wrangler.preview.jsonc`,
+then deploy with `wrangler deploy --config wrangler.preview.jsonc --secrets-file .wrangler/preview-secrets.json`.
+
+Demo authentication requires `APP_ENV=preview`, the exact `DEMO_AUTH_HOST`,
+configured synthetic `DEMO_AUTH_PHONE`, and secret `DEMO_AUTH_CODE`. It never
+calls Twilio. It retains rate limits, single-use challenges, secure sessions,
+admin checks and booking ownership. The production config sets
+`APP_ENV=production`; demo login is denied there even if demo secrets are set.
+Never copy preview accounts or bookings into the launch database. Rebuild
+without `VITE_APP_ENV=preview` and use verified Twilio accounts for launch.

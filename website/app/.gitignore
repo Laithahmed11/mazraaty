@@ -20,6 +20,7 @@ dist-ssr
 .wrangler/
 .dev.vars
 wrangler.deploy.jsonc
+wrangler.preview.jsonc
 
 # Editor directories and files
 .vscode/*

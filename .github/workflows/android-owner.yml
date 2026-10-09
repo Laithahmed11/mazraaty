@@ -25,7 +25,7 @@ jobs:
         run: |
           unzip -p android/owner/build/Mazraaty-Owner-test.apk classes.dex > /tmp/mazraaty-owner.dex
           strings /tmp/mazraaty-owner.dex > /tmp/mazraaty-owner-strings.txt
-          grep -F 'mazraati.laithlaith500.workers.dev' /tmp/mazraaty-owner-strings.txt
+          grep -F 'mazraati-preview.laithlaith500.workers.dev' /tmp/mazraaty-owner-strings.txt
           if grep -F 'mazraaty-iraq.higgsfield.app' /tmp/mazraaty-owner-strings.txt; then exit 1; fi
       - uses: actions/upload-artifact@v4
         with:
