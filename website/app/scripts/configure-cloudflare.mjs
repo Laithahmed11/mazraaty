@@ -8,5 +8,10 @@ if (!id || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.te
 const config = JSON.parse(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"));
 config.d1_databases[0].database_id = id;
 config.vars = { ...config.vars, REQUIRE_PHONE_AUTH: "true", APP_ENV: "production" };
+if(process.env.FCM_PROJECT_ID){
+ if(!/^[a-z][a-z0-9-]{4,62}$/.test(process.env.FCM_PROJECT_ID))throw Error('Invalid Firebase project ID.');
+ config.vars.FCM_PROJECT_ID=process.env.FCM_PROJECT_ID;
+ if(process.env.PUSH_ENABLED==='true')config.vars.PUSH_ENABLED='true';
+}
 writeFileSync(new URL("../wrangler.deploy.jsonc", import.meta.url), JSON.stringify(config, null, 2) + "\n");
 console.log("Prepared independent mazraati Worker config (mazraaty-db / mazraaty-photos).");

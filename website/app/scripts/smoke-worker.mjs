@@ -41,7 +41,7 @@ try {
   }
   assert.ok(ready, "Worker must start with local bindings");
   assert.deepEqual(await (await call("catalog")).json(), { farms: [] });
-  for (const route of ["/", "/customer", "/owner"]) {
+  for (const route of ["/", "/customer", "/owner", "/privacy", "/terms", "/delete-account", "/support"]) {
     const page = await fetch(origin + route);
     assert.equal(page.status, 200, route);
     const html = await page.text();

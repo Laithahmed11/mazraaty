@@ -4,10 +4,11 @@ The Android preview has received offers and booking-created/confirmed/cancelled 
 
 ## Implemented preparation
 
-- Customer brand/hero remain shared across Explore, Favorites and Bookings. Account, push preferences and account deletion are accessible from the header.
+- The customer brand/header remains shared across Explore, Favorites and Bookings. The compact discovery banner appears only in Explore; the other tabs begin directly with their content. Account, push preferences and account deletion are accessible from the header.
 - Existing favorites/search/region/price/capacity/service filters remain. Ratings are stars only, after the verified account's confirmed booking has ended in Baghdad time; cancellation/rejection and another account cannot rate.
 - Public `/privacy`, `/terms`, `/support`, `/delete-account` pages; immediate in-app deletion and an external email request path. Published contact information is the existing operator contact. The operator must actually meet the stated response/deletion deadlines.
 - Android targets API 36 with a configurable exact host and guarded private signing for AAB release. No upload key or store credentials are committed. Existing preview APKs must be rebuilt to update native code.
+- A permanent upload key was generated and verified locally in ignored `android/.private-signing/`. It has not been uploaded anywhere. Preserve the entire folder privately off-device before release. `android/build-release.ps1 -LaunchHost YOUR_DOMAIN` reads the private local signing configuration without printing it and refuses to build before launch credentials/pages pass.
 - Cloudflare observability is enabled. `scripts/backup-d1.mjs` exports only to ignored private files with 30-day retention on subsequent runs; it is not an off-device or scheduled backup until configured. R2 remains private. D1 restore must preserve deletion requests.
 
 ## Required before launch (not replaceable by code)

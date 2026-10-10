@@ -18,6 +18,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_D1_DATABASE_ID: ${{ vars.CLOUDFLARE_D1_DATABASE_ID }}
       VITE_PUBLIC_SITE_URL: ${{ vars.VITE_PUBLIC_SITE_URL }}
+      FCM_PROJECT_ID: ${{ vars.FCM_PROJECT_ID }}
+      PUSH_ENABLED: ${{ vars.PUSH_ENABLED }}
     steps:
       - uses: actions/checkout@v4
       - name: Require new-account configuration

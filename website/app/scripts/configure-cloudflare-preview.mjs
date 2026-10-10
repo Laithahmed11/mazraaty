@@ -12,6 +12,14 @@ config.name = "mazraati-preview";
 config.d1_databases = [{ binding: "DB", database_name: "mazraaty-preview-db", database_id: id, migrations_dir: "migrations" }];
 config.r2_buckets = [{ binding: "STORAGE", bucket_name: "mazraaty-preview-photos" }];
 config.vars = { APP_ENV: "preview", REQUIRE_PHONE_AUTH: "true", DEMO_AUTH_HOST: "mazraati-preview.laithlaith500.workers.dev", DEMO_AUTH_PHONE: "+9647700000000" };
+const previousPath=new URL('wrangler.preview.jsonc',base);
+if(existsSync(previousPath)){
+ const previous=JSON.parse(readFileSync(previousPath,'utf8'));
+ if(previous.name==='mazraati-preview'&&previous.d1_databases?.[0]?.database_id===id&&/^[a-z][a-z0-9-]{4,62}$/.test(previous.vars?.FCM_PROJECT_ID||'')){
+  config.vars.FCM_PROJECT_ID=previous.vars.FCM_PROJECT_ID;
+  if(previous.vars.PUSH_ENABLED==='true')config.vars.PUSH_ENABLED='true';
+ }
+}
 writeFileSync(new URL("wrangler.preview.jsonc", base), JSON.stringify(config, null, 2) + "\n");
 mkdirSync(new URL(".wrangler/", base), { recursive: true });
 const secretsPath = new URL(".wrangler/preview-secrets.json", base);

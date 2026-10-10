@@ -41,6 +41,12 @@ test('authenticated devices, offers consent, atomic booking outbox, retries and 
   failProvider=true;expect((await call('owner/bookings/'+booking.id,'PATCH',{status:'confirmed'},owner.cookie)).r.status).toBe(200);await dispatchPush(env);expect(sends.filter(x=>x.data.kind==='confirmed')).toHaveLength(0);
   failProvider=false;db.raw.exec('UPDATE push_deliveries SET next_attempt=0');await dispatchPush(env);expect(sends.filter(x=>x.data.kind==='confirmed')).toHaveLength(1);expect(sends.find(x=>x.data.kind==='confirmed').token).toBe(token);
   expect(JSON.stringify(sends)).not.toContain('معلومة خاصة');expect(JSON.stringify(sends)).not.toContain('07700000000');
+  const actualNow=Date.now;
+  try{
+   Date.now=()=>Date.parse(date+'T15:59:59+03:00');await dispatchPush(env);expect(sends.filter(x=>x.data.kind==='reminder')).toHaveLength(0);
+   Date.now=()=>Date.parse(date+'T16:00:00+03:00');await dispatchPush(env);expect(sends.filter(x=>x.data.kind==='reminder')).toHaveLength(1);
+   expect(sends.find(x=>x.data.kind==='reminder').token).toBe(token);await dispatchPush(env);expect(sends.filter(x=>x.data.kind==='reminder')).toHaveLength(1);
+  }finally{Date.now=actualNow;}
   await call('account/logout','POST',{},customer.cookie);expect(db.raw.query('SELECT token FROM push_devices WHERE token=?').get(token)).toBeNull();
   expect((await call('push/device','POST',{token,binding},customer.cookie)).r.status).toBe(401);
   await call('owner/logout','POST',{},owner.cookie);expect(db.raw.query('SELECT COUNT(*) AS n FROM push_devices').get()).toEqual({n:0});

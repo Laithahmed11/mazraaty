@@ -595,3 +595,12 @@ html:has(.mz-app:not(.mz-owner)),body:has(.mz-app:not(.mz-owner)){background:#f5
 .mz-legal{max-width:780px;margin:auto;padding:24px 22px 70px;line-height:1.9}
 .mz-legal h1{font-size:32px}.mz-legal h2{font-size:22px;margin-top:28px}.mz-legal p{margin:12px 0}
 .mz-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.mz-rating select{width:auto}
+/* Compact discovery banner; the other tabs begin directly with their content. */
+.mz-app:not(.mz-owner) .mz-discover{min-height:300px;margin:8px 0 24px}
+.mz-app:not(.mz-owner) .mz-discover-copy{padding:24px;min-height:inherit}
+.mz-app:not(.mz-owner) .mz-discover h1{font-size:38px;line-height:1.2;margin:8px 0}
+.mz-app:not(.mz-owner) .mz-discover p{font-size:14px;margin-bottom:14px;max-width:340px}
+.mz-app:not(.mz-owner) .mz-discover .mz-primary{min-height:46px;padding:10px 22px;font-size:14px}
+.mz-app:not(.mz-owner) .mz-discover .mz-eyebrow{font-size:11px;padding:5px 10px}
+.mz-app:not(.mz-owner) .mz-image-note{top:12px;right:12px;font-size:10px;padding:5px 10px}
+@media(min-width:700px){.mz-app:not(.mz-owner) .mz-discover{min-height:330px}.mz-app:not(.mz-owner) .mz-discover h1{font-size:44px}}
