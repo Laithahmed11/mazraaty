@@ -13,7 +13,7 @@ import java.util.HashMap;
 
 /** Test build. Shared data is stored on the HTTPS service, never in Wix. */
 public class MainActivity extends Activity {
- private static final String HOST="mazraati-preview.laithlaith500.workers.dev";
+ private static final String HOST=BuildConfig.SITE_HOST;
  private static final String START_PATH="/owner";
  private static final boolean OWNER=true;
  private static final int PICK_IMAGE=410;

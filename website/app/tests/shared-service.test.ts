@@ -3,7 +3,7 @@ import {Database} from "bun:sqlite";
 import {readFileSync} from "node:fs";
 import {handleShared,type SharedEnv} from "../src/lib/shared-api.server";
 class DB{
- raw=new Database(":memory:");constructor(applyPeriods=true){this.raw.exec(readFileSync("migrations/0001_shared_mazraaty.sql","utf8"));if(applyPeriods)this.raw.exec(readFileSync("migrations/0002_booking_periods.sql","utf8"));}
+ raw=new Database(":memory:");constructor(applyPeriods=true){this.raw.exec(readFileSync("migrations/0001_shared_mazraaty.sql","utf8"));if(applyPeriods)for(const f of ["0002_booking_periods.sql","0003_phone_accounts.sql","0004_push_notifications.sql","0005_reviews_and_deletion_ledger.sql"])this.raw.exec(readFileSync("migrations/"+f,"utf8"));}
  prepare(sql:string){const db=this;let args:unknown[]=[];return {bind(...values:unknown[]){args=values;return this;},async first(){return db.raw.prepare(sql).get(...args as any[]);},async all(){return {results:db.raw.prepare(sql).all(...args as any[])};},async run(){const result=db.raw.prepare(sql).run(...args as any[]);return {meta:{changes:result.changes}};}};}
  async batch(statements:any[]){this.raw.exec("BEGIN");try{const out=[];for(const s of statements)out.push(await s.run());this.raw.exec("COMMIT");return out;}catch(e){this.raw.exec("ROLLBACK");throw e;}}
 }

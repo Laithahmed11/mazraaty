@@ -1,5 +1,6 @@
 import type {SharedEnv} from './shared-api.server';
 import {pushEndpoint} from './push.server';
+import {bookingEnd} from './booking-time';
 type Customer={id:string;phone:string;booking_token:string};
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join('');
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -21,6 +22,19 @@ export async function withCustomerAuth(request:Request,env:SharedEnv,core:(r:Req
  const path=new URL(request.url).pathname.replace(/^\/api\/v2\/?/,''),method=request.method;
  const demo=demoReady(request,env),ready=demo||phoneAuthReady(env);
  if(!env.DB)return core(request,env);
+ if(/^bookings\/[a-zA-Z0-9-]{1,80}\/review$/.test(path)){
+  if(method!=='POST')return error(405,'الطلب غير متاح.');
+  if(request.headers.get('Origin')!==new URL(request.url).origin)return error(403,'افتح الطلب من التطبيق الرسمي.');
+  if(!ready)return error(503,'تسجيل الهاتف قيد التجهيز.');
+  const c=await customer(request,env);if(!c)return error(401,'سجل الدخول حتى تقيّم طلعتك.');
+  const principal=await hash(c.booking_token),id=path.split('/')[1];
+  const booking=await env.DB.prepare('SELECT farm_id,date,period,status FROM bookings WHERE id=? AND device_hash=?').bind(id,principal).first<{farm_id:string;date:string;period:string;status:string}>();
+  if(!booking)return error(404,'الحجز غير موجود بحسابك.');
+  if(booking.status!=='confirmed'||bookingEnd(booking.date,booking.period)>Date.now())return error(409,'التقييم متاح بعد انتهاء حجز مؤكد فقط.');
+  const value=await input(request);if(!Number.isInteger(value.stars)||Number(value.stars)<1||Number(value.stars)>5)return error(400,'اختار من نجمة إلى خمس نجوم.');
+  await env.DB.prepare('INSERT INTO farm_reviews(booking_id,farm_id,principal,stars,created_at) VALUES(?,?,?,?,?) ON CONFLICT(booking_id) DO UPDATE SET stars=excluded.stars WHERE farm_reviews.principal=excluded.principal').bind(id,booking.farm_id,principal,value.stars,now()).run();
+  return result({saved:true});
+ }
  if(path.startsWith('push/')){
   if(!ready)return error(503,'تسجيل الهاتف قيد التجهيز.');
   const c=await customer(request,env),token=getCookie(request,'mazraaty_customer');

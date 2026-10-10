@@ -1,0 +1,19 @@
+name: Check independent Cloudflare uptime
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  uptime:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require selected monitoring URL
+        env:
+          HEALTH_URL: ${{ vars.MAZRAATY_HEALTH_URL }}
+        run: |
+          test -n "$HEALTH_URL" || { echo 'Set MAZRAATY_HEALTH_URL after selecting the launch environment'; exit 1; }
+          case "$HEALTH_URL" in https://*/api/v2/health) ;; *) exit 1 ;; esac
+          curl --fail --silent --show-error --max-time 20 --retry 2 "$HEALTH_URL" > /tmp/health.json
+          node -e 'const v=require("/tmp/health.json"); if(v.online!==true)process.exit(1)'

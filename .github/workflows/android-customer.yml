@@ -17,16 +17,16 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.11.1'
+          gradle-version: '8.13'
       - name: Prepare Firebase app configuration
         env:
           FIREBASE_APP_CONFIG: ${{ secrets.FIREBASE_CUSTOMER_JSON }}
         run: |
           if [ -n "$FIREBASE_APP_CONFIG" ]; then printf '%s' "$FIREBASE_APP_CONFIG" > android/customer/google-services.json; fi
-      - name: Prepare Android 35 toolchain
+      - name: Prepare Android 36 toolchain
         run: |
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;35.0.0' 'platforms;android-35'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'build-tools;36.0.0' 'platforms;android-36'
       - name: Build and verify signed test APK
         run: bash android/customer/build.sh
       - name: Verify Cloudflare address in compiled APK

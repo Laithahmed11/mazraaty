@@ -3,16 +3,37 @@ apply plugin: 'com.android.application'
 if (file('google-services.json').exists()) apply plugin: 'com.google.gms.google-services'
 android {
     namespace "com.mazraaty.${project.name}"
-    compileSdk 35
+    compileSdk 36
     defaultConfig {
         applicationId "com.mazraaty.${project.name}"
         minSdk 24
-        targetSdk 35
-        versionCode 4
-        versionName '0.5-preview-push'
+        targetSdk 36
+        versionCode 5
+        versionName '0.6'
+        buildConfigField 'String', 'SITE_HOST', '"' + (project.findProperty('siteHost') ?: 'mazraati-preview.laithlaith500.workers.dev') + '"'
     }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            if (System.getenv('MAZRAATY_KEYSTORE')) {
+                storeFile file(System.getenv('MAZRAATY_KEYSTORE'))
+                storePassword System.getenv('MAZRAATY_STORE_PASSWORD')
+                keyAlias System.getenv('MAZRAATY_KEY_ALIAS')
+                keyPassword System.getenv('MAZRAATY_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release } }
     sourceSets { main { manifest.srcFile 'AndroidManifest.xml'; java.srcDirs = ['src', '../push/src']; res.srcDirs = ['res'] } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }
+}
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.project == project && it.name.toLowerCase().contains('release') }) {
+        def host = project.findProperty('siteHost')
+        if (!host || host.toString().contains('preview') || !(host ==~ /[a-z0-9]+([.-][a-z0-9]+)+/)) throw new GradleException('A verified launch siteHost is required for release.')
+        if (!file('google-services.json').exists()) throw new GradleException('Firebase app configuration required for release.')
+        ['MAZRAATY_KEYSTORE','MAZRAATY_STORE_PASSWORD','MAZRAATY_KEY_ALIAS','MAZRAATY_KEY_PASSWORD'].each { if (!System.getenv(it)) throw new GradleException('Private release signing missing: ' + it) }
+    }
 }
 dependencies {
     implementation platform('com.google.firebase:firebase-bom:34.4.0')

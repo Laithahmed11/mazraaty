@@ -4,7 +4,7 @@
 
 ثبّت Mazraaty-Customer-test.apk للزبائن وMazraaty-Owner-test.apk للإدارة. كلمة الإدارة محفوظة بملف منفصل خاص بالمالك ولا تُضمّن بالكود أو ملفات APK. عند إضافة مزرعة اختر «نشر» حتى تظهر للزبائن. طلب الحجز يحتاج موافقة الإدارة؛ تأكيد الحجز لا يعني دفع المال. دفع QI مؤجل لحين حساب تاجر.
 
-هذه تطبيقات WebView تحمل واجهة الخادم الآمنة. تحديث واجهة الخادم يظهر بالتطبيقين. لتعديل غلاف أندرويد استعمل المصادر هنا وأعد البناء. تتطلب ملفات build.sh نظام Bash وJDK 17 وGradle 8.11.1 وأدوات Android SDK build-tools 35.0.0 وplatform android-35، واضبط ANDROID_SDK_ROOT. شغّل customer/build.sh ثم owner/build.sh. مفتاح التوقيع المرفق للتجربة فقط؛ استخدم مفتاح إنتاج منفصل قبل نشر المتجر.
+هذه تطبيقات WebView تحمل واجهة الخادم الآمنة. تحديث واجهة الخادم يظهر بالتطبيقين. لتعديل غلاف أندرويد استعمل المصادر هنا وأعد البناء. تتطلب ملفات build.sh نظام Bash وJDK 17 وGradle 8.13 وأدوات Android SDK build-tools 36.0.0 وplatform android-36، واضبط ANDROID_SDK_ROOT. شغّل customer/build.sh ثم owner/build.sh. مفتاح التوقيع المرفق للتجربة فقط؛ استخدم مفتاح إنتاج منفصل قبل نشر المتجر.
 
 تطبيق الإدارة الآن يفتح `https://mazraati-preview.laithlaith500.workers.dev/owner` على Cloudflare.
 تطبيق الزبون الآن يفتح `https://mazraati-preview.laithlaith500.workers.dev/customer`. على Windows يمكن بناء الإدارة عبر

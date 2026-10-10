@@ -17,8 +17,8 @@ to deliver notifications to the two native Android wrappers. iOS is not implemen
    Worker only. Set `FCM_PROJECT_ID` and `PUSH_ENABLED=true` in its private Wrangler
    config. Do not put the service-account JSON in an APK or a GitHub artifact.
 4. Apply additive D1 migrations to the preview DB, build the preview site, deploy
-   the preview Worker, and rebuild both Android apps with JDK 17, Gradle 8.11.1
-   and Android SDK 35. The scripts/CI verify the resulting signed debug APKs.
+   the preview Worker, and rebuild both Android apps with JDK 17, Gradle 8.13
+   and Android SDK 36. The scripts/CI verify the resulting signed debug APKs.
 5. Install on a physical Android device with Google Play services. Sign in and
    explicitly enable notifications; on Android 13+ accept the OS permission.
    Check new booking, confirmation, rejection, cancellation, reminder and logout

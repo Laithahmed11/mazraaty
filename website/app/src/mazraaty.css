@@ -586,3 +586,12 @@ html:has(.mz-app:not(.mz-owner)),body:has(.mz-app:not(.mz-owner)){background:#f5
 .mz-app:not(.mz-owner) .mz-dialog :is(.mz-calendar,.mz-detail-facts,.mz-booking-facts,.mz-period-picker button,.mz-amenities span,.mz-days button,.mz-message,.mz-bookbar,.mz-icon,.mz-account-note,.mz-tag){-webkit-backdrop-filter:none;backdrop-filter:none}
 .mz-app:not(.mz-owner) .mz-dialog :is(.mz-calendar,.mz-detail-facts,.mz-booking-facts,.mz-amenities span){background:linear-gradient(145deg,#ffffffcc,#ffffff80)}
 .mz-app:not(.mz-owner) .mz-dialog .mz-bookbar{background:linear-gradient(180deg,#fffcf6b3,#fffcf6f2)}
+.mz-top-actions{display:flex;gap:8px;align-items:center}
+.mz-top-actions .mz-icon{width:44px;height:44px;flex-shrink:0;background:var(--glass-bg,var(--mz-white));border:1px solid var(--mz-line);box-shadow:var(--mz-shadow-sm)}
+.mz-tab-content{scroll-margin-top:24px;min-height:45vh}
+.mz-settings-links{display:grid;gap:12px;margin:22px 0}
+.mz-settings-links a{padding:14px;border:1px solid var(--mz-line);border-radius:16px;background:var(--mz-white)}
+.mz-delete-account{border-top:1px solid var(--mz-line);padding-top:18px;display:grid;gap:12px}
+.mz-legal{max-width:780px;margin:auto;padding:24px 22px 70px;line-height:1.9}
+.mz-legal h1{font-size:32px}.mz-legal h2{font-size:22px;margin-top:28px}.mz-legal p{margin:12px 0}
+.mz-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.mz-rating select{width:auto}
