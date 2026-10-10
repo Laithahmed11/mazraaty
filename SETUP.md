@@ -13,11 +13,11 @@ Requires Git, Node.js 22 or newer and Bun (tested with Bun 1.4.2).
 cd website/app
 bun install --frozen-lockfile
 bun run typecheck
-bun test tests/shared-service.test.ts tests/customer-auth.test.ts
+bun run test:product
 bun run build
 ```
 
-The full scaffold includes old template tests; `landing-contract.test.ts` still expects the original ScrollScrub home route and has one known failing assertion on this adapted farm app. The product tests above passed with 92 assertions on the source snapshot. Do not replace the product home with the scaffold merely to satisfy that assertion.
+The full scaffold includes old template tests; `landing-contract.test.ts` still expects the original ScrollScrub home route and has one known failing assertion on this adapted farm app. The product suite covers booking, phone accounts, security headers, Cloudflare storage and push notifications. Do not replace the product home with the scaffold merely to satisfy that assertion.
 
 This is a Cloudflare Worker application using TanStack Start. Plain Node SSR alone does not provide `cloudflare:workers` bindings. Build the app, run `bun run db:local` and `bun run dev:worker` with the local D1 binding `DB` and R2 binding `STORAGE`. The checked-in database UUID is a local placeholder. Wrangler applies the migration files in order to a **local test database**. Do not run destructive migrations against production.
 
