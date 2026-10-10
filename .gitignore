@@ -28,3 +28,9 @@ DerivedData/
 *.ipa
 *.apk
 *.zip
+
+# Firebase configuration is supplied locally or through CI secrets
+google-services.json
+*service-account*.json
+.gradle/
+local.properties

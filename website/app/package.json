@@ -14,7 +14,7 @@
     "cf:dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry-run",
     "db:remote": "wrangler d1 migrations apply DB --remote --config wrangler.deploy.jsonc",
     "deploy": "wrangler deploy --config wrangler.deploy.jsonc",
-    "test:product": "bun test tests/shared-service.test.ts tests/customer-auth.test.ts tests/security-headers.test.ts tests/cloudflare-storage.test.ts",
+    "test:product": "bun test tests/shared-service.test.ts tests/customer-auth.test.ts tests/security-headers.test.ts tests/cloudflare-storage.test.ts tests/push-notifications.test.ts",
     "test:worker": "node scripts/smoke-worker.mjs",
     "dev:design": "HF_DESIGN_INSPECTOR=1 vite dev --mode design",
     "build": "bun run check:ui && tsr generate && tsc --noEmit && vite build",

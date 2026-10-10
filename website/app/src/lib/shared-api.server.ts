@@ -1,6 +1,7 @@
 import {withCustomerAuth} from "./customer-auth.server";
+import {pushEndpoint,pushReady} from "./push.server";
 import type {D1Database,R2Bucket} from "@cloudflare/workers-types";
-export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string;APP_ENV?:string;DEMO_AUTH_HOST?:string;DEMO_AUTH_PHONE?:string;DEMO_AUTH_CODE?:string};
+export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string;APP_ENV?:string;DEMO_AUTH_HOST?:string;DEMO_AUTH_PHONE?:string;DEMO_AUTH_CODE?:string;PUSH_ENABLED?:string;FCM_PROJECT_ID?:string;FCM_CLIENT_EMAIL?:string;FCM_PRIVATE_KEY?:string};
 class Problem extends Error{constructor(public status:number,public code:string,message:string){super(message);}}
 const fail=(status:number,code:string,message:string):never=>{throw new Problem(status,code,message);};
 const digest=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,"0")).join("");
@@ -35,6 +36,19 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
   if(path==="catalog"&&method==="GET"){const rows=await db.prepare("SELECT farms.*, (SELECT COUNT(*) FROM bookings WHERE bookings.farm_id=farms.id AND bookings.status='confirmed') AS confirmed_count FROM farms WHERE published=1 ORDER BY updated_at DESC").all<FarmRow & {confirmed_count:number}>();return response({farms:rows.results.map(row=>({...farmJSON(row),confirmedBookings:row.confirmed_count}))});}
   if(path==="login"&&method==="POST"){await rate(db,"login:"+request.headers.get("CF-Connecting-IP"),8,600);const value=await body(request),password=credential(env),incoming=text(value.password,256);if(!sameSecret(await digest(incoming),await digest(password)))return fail(401,"wrong_password","كلمة الإدارة غير صحيحة.");const token=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,"0")).join("");await db.prepare("INSERT INTO sessions(id,credential_tag,expires) VALUES(?,?,?)").bind(await digest(token),await digest(password),Math.floor(Date.now()/1000)+28800).run();return response({authenticated:true},200,{"Set-Cookie":"mazraaty_admin="+token+"; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800"});}
   if(path.startsWith("owner/")){const session=await admin(request,env);const local=path.slice(6);
+   if(local==='push/campaigns'&&method==='POST'){
+    if(!pushReady(env))return fail(503,'push_not_ready','إشعارات الهاتف قيد الربط.');
+    const value=await body(request),title=text(value.title,80),message=text(value.body,300),id=identifier(text(value.requestId,80));
+    const previous=await db.prepare('SELECT title,body FROM push_events WHERE id=?').bind('offer:'+id).first<{title:string;body:string}>();
+    if(previous){if(previous.title!==title||previous.body!==message)return fail(409,'request_conflict','تغير نص العرض. أرسل طلباً جديداً.');return response({queued:true,id});}
+    await rate(db,'push-campaigns',5,86400);
+    await db.batch([
+     db.prepare("INSERT OR IGNORE INTO push_events(id,booking_id,role,kind,created_at,title,body) VALUES(?,'','customer','offer',?,?,?)").bind('offer:'+id,Math.floor(Date.now()/1000),title,message),
+     db.prepare("INSERT OR IGNORE INTO push_deliveries(event_id,token_hash) SELECT ?,p.token_hash FROM push_devices p JOIN customer_sessions s ON s.id=p.session_id WHERE p.role='customer' AND p.marketing=1 AND s.expires>?").bind('offer:'+id,Math.floor(Date.now()/1000))
+    ]);
+    return response({queued:true,id},202);
+   }
+   if(local.startsWith("push/"))return pushEndpoint(request,env,{role:'owner',principal:await digest(credential(env)),session});
    if(local==="logout"&&method==="POST"){await db.prepare("DELETE FROM sessions WHERE id=?").bind(session).run();return response({signedOut:true},200,{"Set-Cookie":"mazraaty_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0"});}
    if(local==="status"&&method==="GET")return response({authenticated:true});
    if(local==="farms"&&method==="GET"){const rows=await db.prepare("SELECT * FROM farms ORDER BY updated_at DESC").all<FarmRow>();return response({farms:rows.results.map(farmJSON)});}

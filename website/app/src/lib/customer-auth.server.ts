@@ -1,4 +1,5 @@
 import type {SharedEnv} from './shared-api.server';
+import {pushEndpoint} from './push.server';
 type Customer={id:string;phone:string;booking_token:string};
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join('');
 const random=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -20,6 +21,12 @@ export async function withCustomerAuth(request:Request,env:SharedEnv,core:(r:Req
  const path=new URL(request.url).pathname.replace(/^\/api\/v2\/?/,''),method=request.method;
  const demo=demoReady(request,env),ready=demo||phoneAuthReady(env);
  if(!env.DB)return core(request,env);
+ if(path.startsWith('push/')){
+  if(!ready)return error(503,'تسجيل الهاتف قيد التجهيز.');
+  const c=await customer(request,env),token=getCookie(request,'mazraaty_customer');
+  if(!c||!token)return error(401,'سجل الدخول لتفعيل الإشعارات.');
+  return pushEndpoint(request,env,{role:'customer',principal:await hash(c.booking_token),session:await hash(token)});
+ }
  if(path.startsWith('account/')){
  if(method!=='GET'&&request.headers.get('Origin')!==new URL(request.url).origin)return error(403,'افتح الطلب من التطبيق الرسمي.');
  if(path==='account/status'&&method==='GET'){const c=ready?await customer(request,env):null;return result({enabled:ready||env.REQUIRE_PHONE_AUTH==='true',authenticated:!!c,phone:c?.phone||'',...(demo?{demo:true}:{})});}

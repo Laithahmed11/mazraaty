@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
  private static final String START_PATH="/customer";
  private static final boolean OWNER=false;
  private static final int PICK_IMAGE=410;
- private WebView web;private FrameLayout frame;private LinearLayout failure;
+ private com.mazraaty.push.PushBridge push;private WebView web;private FrameLayout frame;private LinearLayout failure;
  private ValueCallback<Uri[]> fileCallback;private boolean failed;
  @Override public void onCreate(Bundle state){
   super.onCreate(state);getWindow().setStatusBarColor(Color.rgb(243,245,250));getWindow().setNavigationBarColor(Color.rgb(243,245,250));
@@ -44,8 +44,12 @@ public class MainActivity extends Activity {
     try{startActivityForResult(pick,PICK_IMAGE);}catch(Exception e){fileCallback.onReceiveValue(null);fileCallback=null;Toast.makeText(MainActivity.this,"لا يوجد منتقي صور على الجهاز",Toast.LENGTH_LONG).show();}return true;
    }
   });
-  web.loadUrl("https://"+HOST+START_PATH);
+  push=new com.mazraaty.push.PushBridge(this,web,HOST);
+  openIntent(getIntent());
  }
+ private void openIntent(Intent intent){String id=intent.getStringExtra("booking_id");String query=id!=null&&id.matches("[a-zA-Z0-9-]{1,80}")?"?booking="+Uri.encode(id):"";web.loadUrl("https://"+HOST+START_PATH+query);}
+ @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);setIntent(intent);openIntent(intent);}
+ @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==411&&push!=null)push.permissionResult();}
  private boolean allowed(Uri uri){return "https".equals(uri.getScheme())&&HOST.equals(uri.getHost())&&(uri.getPort()==-1||uri.getPort()==443)&&(OWNER||!"/owner".equals(uri.getPath()));}
  private WebResourceResponse denied(){return new WebResourceResponse("text/plain","UTF-8",403,"Blocked",new HashMap<String,String>(),new ByteArrayInputStream(new byte[0]));}
  private boolean navigate(Uri uri){if(allowed(uri))return false;

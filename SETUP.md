@@ -33,6 +33,9 @@ GitHub push does not update the running Higgsfield site. To deploy there, use it
 ## Android
 
 Requires JDK, Bash (Linux, macOS or WSL on Windows), Android SDK platform android-35 and build-tools 35.0.0. Set `ANDROID_SDK_ROOT`, then run:
+The notification-enabled wrappers additionally require JDK 17 and Gradle 8.11.1.
+Read `website/app/PUSH_NOTIFICATIONS.md` for private Firebase configuration and
+physical-device notification acceptance checks.
 
 ```sh
 cd android
