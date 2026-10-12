@@ -595,6 +595,7 @@ html:has(.mz-app:not(.mz-owner)),body:has(.mz-app:not(.mz-owner)){background:#f5
 .mz-legal{max-width:780px;margin:auto;padding:24px 22px 70px;line-height:1.9}
 .mz-legal h1{font-size:32px}.mz-legal h2{font-size:22px;margin-top:28px}.mz-legal p{margin:12px 0}
 .mz-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.mz-rating select{width:auto}
+.mz-brand img{border-radius:12px;object-fit:cover;flex-shrink:0}
 /* Compact discovery banner; the other tabs begin directly with their content. */
 .mz-app:not(.mz-owner) .mz-discover{min-height:300px;margin:8px 0 24px}
 .mz-app:not(.mz-owner) .mz-discover-copy{padding:24px;min-height:inherit}

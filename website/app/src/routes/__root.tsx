@@ -6,7 +6,7 @@ import {reportHiggsfieldError} from "../lib/higgsfield-error-reporting";
 import meta from "../app-meta.json";
 declare const __HF_DESIGN_INSPECTOR__:boolean;
 export const Route=createRootRouteWithContext<{queryClient:QueryClient}>()({
-head:()=>({meta:[{charSet:"utf-8"},{name:"viewport",content:"width=device-width,initial-scale=1,viewport-fit=cover"},{title:meta.og_title||"مزرعتي"},{name:"description",content:meta.og_description||""},{property:"og:title",content:meta.og_title||"مزرعتي"},{property:"og:description",content:meta.og_description||""},{property:"og:image",content:meta.og_image_url||""}],links:[{rel:"stylesheet",href:appCss},{rel:"icon",href:meta.favicon_url||"/assets/mazraaty-logo.svg"}]}),
+head:()=>({meta:[{charSet:"utf-8"},{name:"viewport",content:"width=device-width,initial-scale=1,viewport-fit=cover"},{title:meta.og_title||"مزرعتي"},{name:"description",content:meta.og_description||""},{property:"og:title",content:meta.og_title||"مزرعتي"},{property:"og:description",content:meta.og_description||""},{property:"og:image",content:meta.og_image_url||""}],links:[{rel:"stylesheet",href:appCss},{rel:"icon",type:"image/png",href:meta.favicon_url||"/assets/mazraaty-favicon-v2.png"},{rel:"apple-touch-icon",href:"/assets/mazraaty-touch-icon-v2.png"}]}),
 shellComponent:({children}:{children:ReactNode})=><html lang="ar" dir="rtl"><head><HeadContent/></head><body>{children}<Scripts/></body></html>,
 component:Root,notFoundComponent:()=> <main className="mz-empty"><h1>الصفحة غير موجودة</h1><a href="/customer">رجوع للمزارع</a></main>,
 errorComponent:({reset})=><main className="mz-empty"><h1>تعذر فتح الصفحة</h1><button onClick={reset}>حاول مجدداً</button></main>
