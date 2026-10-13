@@ -1,7 +1,7 @@
 import {withCustomerAuth,phoneAuthReady} from "./customer-auth.server";
 import {pushEndpoint,pushReady} from "./push.server";
 import {validateFarmDetails,validateFarmOffer,farmPrice} from "./farm-details";
-import {checkoutReadiness,createBookingCheckout,deploymentPaymentProvider,applyVerifiedPayment} from './checkout.server';
+import {checkoutReadiness,createBookingCheckout,deploymentPaymentProvider,applyVerifiedPayment,publicCheckout,paymentSummary,reconcilePayment} from './checkout.server';
 import type {D1Database,R2Bucket} from "@cloudflare/workers-types";
 import {boundedBytes} from './wayl.server';
 export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string;APP_ENV?:string;DEMO_AUTH_HOST?:string;DEMO_AUTH_PHONE?:string;DEMO_AUTH_CODE?:string;PUSH_ENABLED?:string;FCM_PROJECT_ID?:string;FCM_CLIENT_EMAIL?:string;FCM_PRIVATE_KEY?:string;PAYMENTS_MODE?:string;WHATSAPP_ENABLED?:string;TWILIO_WHATSAPP_FROM?:string;TWILIO_WHATSAPP_TEMPLATE_SID?:string;PAYMENTS_PROVIDER?:string;WAYL_API_TOKEN?:string;WAYL_WEBHOOK_SECRET?:string;WAYL_ENV?:string;WAYL_LIVE_APPROVED?:string;PAYMENT_SITE_URL?:string};
@@ -24,9 +24,9 @@ function credential(env:SharedEnv){if(!env.ADMIN_PASSWORD||env.ADMIN_PASSWORD.le
 async function admin(request:Request,env:SharedEnv){const password=credential(env),cookie=request.headers.get("Cookie")||"",match=cookie.match(/(?:^|;\s*)mazraaty_admin=([a-f0-9]{64})(?:;|$)/);if(!match)return fail(401,"sign_in_required","سجل دخول الإدارة أولاً.");const row=await dbOf(env).prepare("SELECT credential_tag,expires FROM sessions WHERE id=?").bind(await digest(match[1])).first<{credential_tag:string;expires:number}>();if(!row||row.expires<Math.floor(Date.now()/1000)||row.credential_tag!==await digest(password))return fail(401,"sign_in_required","انتهت جلسة الإدارة. سجل الدخول مجدداً.");return await digest(match[1]);}
 async function device(request:Request,db:D1Database,allowRevoked=false){const token=request.headers.get("X-Device-Token")||"";if(!/^[a-f0-9]{64}$/.test(token))return fail(401,"device_required","تعذر التعرف على هذا الجهاز.");const hash=await digest(token);await db.prepare("INSERT OR IGNORE INTO devices(hash,revoked) VALUES(?,0)").bind(hash).run();const row=await db.prepare("SELECT revoked FROM devices WHERE hash=?").bind(hash).first<{revoked:number}>();if(!row||(!allowRevoked&&row.revoked))return fail(401,"device_revoked","تم حذف بيانات هذا الجهاز. حدّث التطبيق للبدء من جديد.");return hash;}
 type FarmRow={id:string;name:string;region:string;area:string;description:string;price:number;evening_price:number|null;capacity:number;amenities:string;images:string;published:number;revision:number;details:string;offer:string|null};
-type BookingRow={id:string;device_hash:string;request_id:string;payload_hash:string;farm_id:string;farm_name:string;date:string;period:"morning"|"evening"|"full_day";guests:number;customer_name:string;phone:string;notes:string;total:number;status:string;created_at:string;whatsapp_opt_in:number};
+type BookingRow={id:string;device_hash:string;request_id:string;payload_hash:string;farm_id:string;farm_name:string;date:string;period:"morning"|"evening"|"full_day";guests:number;customer_name:string;phone:string;notes:string;total:number;status:string;created_at:string;whatsapp_opt_in:number;payment_status?:string;payment_environment?:string;payment_amount?:number;payment_expires?:number};
 function farmJSON(row:FarmRow){return {...row,eveningPrice:row.evening_price??row.price,images:JSON.parse(row.images),published:!!row.published,details:JSON.parse(row.details),offer:row.offer?JSON.parse(row.offer):null};}
-function bookingJSON(row:BookingRow & {review_stars?:number}){return {whatsappOptIn:!!row.whatsapp_opt_in,reviewStars:row.review_stars||0,id:row.id,farmId:row.farm_id,farmName:row.farm_name,date:row.date,period:row.period,guests:row.guests,name:row.customer_name,phone:row.phone,notes:row.notes,total:row.total,status:row.status,createdAt:row.created_at};}
+function bookingJSON(row:BookingRow & {review_stars?:number}){return {payment:row.payment_status?{status:row.payment_status==='awaiting_payment'&&(row.payment_expires||0)<=Math.floor(Date.now()/1000)?'expired':row.payment_status,amount:row.payment_amount,environment:row.payment_environment,expires:row.payment_expires}:null,whatsappOptIn:!!row.whatsapp_opt_in,reviewStars:row.review_stars||0,id:row.id,farmId:row.farm_id,farmName:row.farm_name,date:row.date,period:row.period,guests:row.guests,name:row.customer_name,phone:row.phone,notes:row.notes,total:row.total,status:row.status,createdAt:row.created_at};}
 function imagePath(value:unknown){const s=text(value,180);if(s!=="/assets/standalone-farm.svg"&&!/^\/api\/v2\/photos\/[a-f0-9-]{36}\.(?:jpg|png|webp)$/.test(s))return fail(400,"invalid_image","استخدم صورة مرفوعة من التطبيق.");return s;}
 function farmInput(value:Record<string,unknown>){let details,offer;try{details=validateFarmDetails(value.details);offer=validateFarmOffer(value.offer,Number(value.price),Number(value.eveningPrice??value.price));}catch(e){return fail(400,"invalid_details",(e as Error).message);}if(typeof value.published!=="boolean")return fail(400,"invalid_input","راجع حالة نشر المزرعة.");if(!Array.isArray(value.images)||value.images.length<1||value.images.length>6)return fail(400,"invalid_images","أضف من صورة واحدة إلى ست صور.");return {name:text(value.name,100),region:text(value.region,60),area:text(value.area,100),description:text(value.description,2000),price:number(value.price,1,100000000),eveningPrice:number(value.eveningPrice??value.price,1,100000000),capacity:number(value.capacity,1,1000),amenities:text(value.amenities,500,false),details:JSON.stringify(details),offer:offer?JSON.stringify(offer):null,images:JSON.stringify(value.images.map(imagePath)),published:value.published?1:0};}
 function sameSecret(a:string,b:string){if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a.charCodeAt(i)^b.charCodeAt(i);return diff===0;}
@@ -40,8 +40,8 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
    let raw;try{raw=await boundedBytes(request)}catch{return fail(413,'too_large','حجم الطلب كبير.');}
    let event;try{event=await provider.verifyEvent(new Request(request.url,{method:'POST',headers:request.headers,body:raw}));}catch{return fail(403,'invalid_payment_event','تعذر التحقق من إشعار الدفع.');}
    if(!event)return response({received:true});
-   const order=await db.prepare('SELECT provider FROM payment_requests WHERE id=?').bind(event.orderId).first<{provider:string}>();
-   if(order?.provider!==provider.name)return fail(400,'payment_mismatch','إشعار الدفع غير مطابق.');
+   const order=await db.prepare('SELECT provider,environment FROM payment_requests WHERE id=?').bind(event.orderId).first<{provider:string;environment:string}>();
+   if(order?.provider!==provider.name||order.environment!==(provider.environment||'live'))return fail(400,'payment_mismatch','إشعار الدفع غير مطابق.');
    try{await applyVerifiedPayment(db,event);}catch{return fail(400,'payment_mismatch','إشعار الدفع غير مطابق.');}
    return response({received:true});
   }
@@ -79,7 +79,7 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
     const saved=await db.prepare("SELECT * FROM farms WHERE id=?").bind(id).first<FarmRow>();return response({farm:farmJSON(saved!)},method==="POST"?201:200);
    }
    if(/^farms\/[a-zA-Z0-9-]+$/.test(local)&&method==="DELETE"){const id=identifier(local.slice(6));const result=await db.prepare("UPDATE farms SET published=0,revision=revision+1,updated_at=? WHERE id=?").bind(new Date().toISOString(),id).run();if(!result.meta.changes)return fail(404,"not_found","المزرعة غير موجودة.");return response({hidden:true,message:"تم إخفاء المزرعة عن الزبائن وحفظ سجلات حجوزاتها."});}
-   if(local==="bookings"&&method==="GET"){const rows=await db.prepare("SELECT * FROM bookings ORDER BY created_at DESC LIMIT 500").all<BookingRow>();return response({bookings:rows.results.map(bookingJSON)});}
+   if(local==="bookings"&&method==="GET"){const rows=await db.prepare("SELECT b.*,p.status AS payment_status,p.environment AS payment_environment,p.amount AS payment_amount,p.expires AS payment_expires FROM bookings b LEFT JOIN payment_requests p ON p.booking_id=b.id ORDER BY b.created_at DESC LIMIT 500").all<BookingRow>();return response({bookings:rows.results.map(bookingJSON),checkout:publicCheckout(env)});}
    if(/^bookings\/[a-zA-Z0-9-]+$/.test(local)&&method==="PATCH"){
     const id=identifier(local.slice(9)),value=await body(request),status=value.status;
     if(!["confirmed","rejected","cancelled"].includes(String(status)))return fail(400,"invalid_status","حالة غير صالحة.");
@@ -110,7 +110,18 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
    const object=await env.STORAGE?.get(key);if(!object)return fail(404,"not_found","الصورة غير موجودة.");return new Response(object.body as unknown as BodyInit,{headers:{"Content-Type":object.httpMetadata?.contentType||"image/jpeg","Cache-Control":publicRow?"public,max-age=300":"no-store"}});
   }
   if(path==="unavailable"&&method==="GET"){const id=identifier(url.searchParams.get("farmId")||""),selected=url.searchParams.get("period");if(selected)period(selected);const rows=await db.prepare("SELECT date,period FROM reserved_dates WHERE farm_id=? AND date>=? ORDER BY date,period").bind(id,today()).all<{date:string;period:string}>();const slots=rows.results;const dates=selected?slots.filter(r=>r.period===selected).map(r=>r.date):Array.from(new Set(slots.map(r=>r.date))).filter(d=>slots.filter(r=>r.date===d).length===2);return response({dates,slots});}
-  if(path==="bookings"&&method==="GET"){const hash=await device(request,db);const rows=await db.prepare("SELECT bookings.*, (SELECT stars FROM farm_reviews WHERE booking_id=bookings.id) AS review_stars FROM bookings WHERE device_hash=? ORDER BY created_at DESC LIMIT 100").bind(hash).all<BookingRow>();return response({bookings:rows.results.map(bookingJSON)});}
+  if(path==="bookings"&&method==="GET"){const hash=await device(request,db);const rows=await db.prepare("SELECT b.*,p.status AS payment_status,p.environment AS payment_environment,p.amount AS payment_amount,p.expires AS payment_expires, (SELECT stars FROM farm_reviews WHERE booking_id=b.id) AS review_stars FROM bookings b LEFT JOIN payment_requests p ON p.booking_id=b.id WHERE b.device_hash=? ORDER BY b.created_at DESC LIMIT 100").bind(hash).all<BookingRow>();return response({bookings:rows.results.map(bookingJSON),checkout:publicCheckout(env)});}
+  if(/^bookings\/[a-zA-Z0-9-]+\/payment$/.test(path)&&['GET','POST','PATCH'].includes(method)){
+   const hash=await device(request,db),id=identifier(path.split('/')[1]);
+   const own=await db.prepare('SELECT id FROM bookings WHERE id=? AND device_hash=?').bind(id,hash).first();
+   if(!own)return fail(404,'not_found','الحجز غير موجود بحسابك.');
+   if(method!=='GET'){
+    if(!checkoutReadiness(env).enabled)return fail(503,'checkout_not_ready','الدفع قيد التفعيل.');
+    await rate(db,'payment:'+hash,30,3600);
+    try{if(method==='POST')await createBookingCheckout(env,id);else await reconcilePayment(env,id)}catch{return fail(503,'payment_unavailable','تعذر التحقق من الدفع. لا تعيد الدفع؛ حدّث الحالة أو تواصل مع الإدارة.');}
+   }
+   return response({checkout:publicCheckout(env),payment:await paymentSummary(env,id)});
+  }
   if(path==="bookings"&&method==="POST"){
    const hash=await device(request,db),value=await body(request),farmId=identifier(text(value.farmId,80)),date=day(value.date),selectedPeriod=period(value.period),guests=number(value.guests,1,1000),name=text(value.name,100),telephone=phone(value.phone),notes=text(value.notes,1000,false),requestId=identifier(text(value.requestId,80));
    if(value.whatsappOptIn!==undefined&&typeof value.whatsappOptIn!=="boolean")return fail(400,"invalid_consent","راجع الموافقة على رسائل واتساب.");const whatsappOptIn=value.whatsappOptIn===true;

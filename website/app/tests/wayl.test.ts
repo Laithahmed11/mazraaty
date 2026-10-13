@@ -25,7 +25,7 @@ test('Wayl isolates Safi references, verifies exact HMAC and independently check
   expect(init.headers['X-WAYL-AUTHENTICATION']).toBe(env.WAYL_API_TOKEN);expect(init.redirect).toBe('error');
   if(init.method==='POST'){
    posts++;const payload=JSON.parse(init.body);expect(payload.env).toBe('test');expect(payload.referenceId).toBe('mazraaty-test-'+id);expect(payload.total).toBe(100000);expect(payload.lineItem[0].amount).toBe(100000);expect(payload.linkExpiresIn).toBe('1h');expect(payload.webhookSecret).not.toBe(env.WAYL_API_TOKEN);
-   link={...payload,id:'wayl-test-link',total:'100000',status:'Created',url:'https://checkout.thewayl.com/pay/UNITTEST',createdAt:new Date().toISOString()};
+   link={...payload,id:'wayl-test-link',total:'100000',status:'Created',url:'https://checkout.thewayl.com/pay?code=UNITTEST',createdAt:new Date().toISOString()};
    if(ambiguous)throw Error('Response lost after creation');return Response.json({data:link},{status:201});
   }
   gets++;return link?Response.json({data:link}):new Response(null,{status:404});
@@ -45,7 +45,7 @@ test('Wayl isolates Safi references, verifies exact HMAC and independently check
   const proof=link.customParameter;link.customParameter='wrong';await expect(provider.verifyEvent(await eventRequest(event))).rejects.toThrow('Wayl metadata mismatch');link.customParameter=proof;
   await expect(provider.verifyEvent(await eventRequest({...event,referenceId:'wix-live-'+id}))).rejects.toThrow('Invalid Wayl reference');
   link.status='Cancelled';expect((await provider.verifyEvent(await eventRequest(event)))!.status).toBe('expired');
-  link.status='Returned';await expect(provider.verifyEvent(await eventRequest(event))).rejects.toThrow('operator review');
+  link.status='Returned';expect((await provider.verifyEvent(await eventRequest(event)))!.status).toBe('review_required');
   link.status='Created';const url=link.url;link.url='https://attacker.invalid/pay/UNITTEST';await expect(provider.createCheckout(value)).rejects.toThrow('Wayl link mismatch');link.url=url;
   link.createdAt=new Date(Date.now()-7200000).toISOString();await expect(provider.createCheckout(value)).rejects.toThrow('Wayl link expired');
   await expect(provider.createCheckout({...value,amount:999})).rejects.toThrow('Invalid amount');

@@ -40,23 +40,34 @@ export function createWaylProvider(env:SharedEnv):PaymentProvider|null{
  async function api(path:string,body?:unknown):Promise<Link|null>{
   const response=await fetch(API+path,{method:body?'POST':'GET',redirect:'error',headers:{'X-WAYL-AUTHENTICATION':token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});
   if(!body&&response.status===404)return null;
-  if(!response.ok)throw Error('Wayl request failed');
+  if(!response.ok){console.warn('Wayl API failed',response.status);throw Error('Wayl request failed');}
   const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await boundedBytes(response,65536)));
   if(!data?.data||typeof data.data!=='object'||Array.isArray(data.data))throw Error('Invalid Wayl response');return data.data;
  }
  async function validate(link:Link|null,id:string,total?:number){
   if(!link||typeof link.url!=='string'||typeof link.id!=='string'||!link.id||link.id.length>180)throw Error('Invalid Wayl link');
   const ref=reference(id),n=amount(link.total),url=new URL(link.url);
-  if(link.referenceId!==ref||link.currency!=='IQD'||(total!==undefined&&n!==total)||url.origin!==CHECKOUT||url.username||url.password||!(url.pathname.startsWith('/pay/')||url.pathname==='/payment/action'))throw Error('Wayl link mismatch');
+  if(link.referenceId!==ref||link.currency!=='IQD'||(total!==undefined&&n!==total)||url.origin!==CHECKOUT||url.username||url.password||!(url.pathname==='/pay'||url.pathname.startsWith('/pay/')||url.pathname==='/payment/action'))throw Error('Wayl link mismatch');
   if(link.webhookUrl!==webhook(id)||link.customParameter!==await proof(ref,n))throw Error('Wayl metadata mismatch');
   return n;
  }
+ async function readPayment(id:string){
+  const link=await api('/api/v1/links/'+encodeURIComponent(reference(id))),total=await validate(link,id);
+  let status:VerifiedPayment['status']|null=null;
+  if(['Complete','Delivered'].includes(link!.status)&&link!.paymentMethod&&link!.completedAt&&Number.isFinite(Date.parse(link!.completedAt)))status='paid';
+  else if(['Cancelled','Rejected'].includes(link!.status))status='expired';
+  else if(link!.status==='Returned')status='review_required';
+  else if(!['Created','Pending','Processing'].includes(link!.status))throw Error('Wayl status requires operator review');
+  return status?{orderId:id,providerReference:link!.id,amount:total,currency:'IQD' as const,status}:null;
+ }
  return {name:'wayl',environment:mode as 'test'|'live',allowedOrigins:[CHECKOUT],
+  readPayment,
   async createCheckout(value){
    const total=amount(value.amount);if(value.currency!=='IQD')throw Error('Invalid currency');
    const ref=reference(value.orderId),path='/api/v1/links/'+encodeURIComponent(ref);
    let link=await api(path);
-   if(!link){try{link=await api('/api/v1/links',{env:mode,referenceId:ref,total,currency:'IQD',lineItem:[{label:'Mazraaty farm reservation',amount:total,type:'increase'}],webhookUrl:webhook(value.orderId),webhookSecret:await hmac(secret,'webhook:'+ref),redirectionUrl:site+'/customer',customParameter:await proof(ref,total),linkExpiresIn:'1h'})}catch{link=await api(path)}}
+   if(!/^[a-zA-Z0-9-]{1,80}$/.test(value.bookingId))throw Error('Invalid booking');
+   if(!link){try{link=await api('/api/v1/links',{env:mode,referenceId:ref,total,currency:'IQD',lineItem:[{label:'Mazraaty farm reservation',amount:total,type:'increase'}],webhookUrl:webhook(value.orderId),webhookSecret:await hmac(secret,'webhook:'+ref),redirectionUrl:site+'/customer?booking='+value.bookingId+'&paymentReturn=1',customParameter:await proof(ref,total),linkExpiresIn:'1h'})}catch{link=await api(path)}}
    await validate(link,value.orderId,total);
    // Never send an already paid/cancelled/recovered expired link to a customer.
    if(link!.status!=='Created')throw Error('Wayl link not open');
@@ -75,6 +86,7 @@ export function createWaylProvider(env:SharedEnv):PaymentProvider|null{
    if(['Complete','Delivered'].includes(link!.status)&&link!.paymentMethod&&link!.completedAt&&Number.isFinite(Date.parse(link!.completedAt)))return {orderId:id,providerReference:link!.id,amount:total,currency:'IQD',status:'paid'};
    if(['Cancelled','Rejected'].includes(link!.status))return {orderId:id,providerReference:link!.id,amount:total,currency:'IQD',status:'expired'};
    if(['Created','Pending','Processing'].includes(link!.status))return null;
+   if(link!.status==='Returned')return {orderId:id,providerReference:link!.id,amount:total,currency:'IQD',status:'review_required'};
    throw Error('Wayl status requires operator review');
   }
  };

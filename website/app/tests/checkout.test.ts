@@ -24,6 +24,42 @@ test('checkout preparation cannot charge or send in preview; owner-only setup en
   expect(db.raw.query('SELECT COUNT(*) AS n FROM payment_requests').get()).toEqual({n:0});expect(calls).toBe(0);
  }finally{globalThis.fetch=before;db.raw.close()}
 });
+test('in-app sandbox payment requires the verified booking owner, needs no WhatsApp consent, and never trusts a return URL',async()=>{
+ const db=new DB(),origin='https://mazraati-preview.laithlaith500.workers.dev',session='a'.repeat(64),otherSession='b'.repeat(64),token='c'.repeat(64),otherToken='d'.repeat(64),principal=await hash(token),date=new Date(Date.now()+14*86400000).toISOString().slice(0,10);
+ const env={DB:db,APP_ENV:'preview',REQUIRE_PHONE_AUTH:'true',DEMO_AUTH_HOST:'mazraati-preview.laithlaith500.workers.dev',DEMO_AUTH_PHONE:'+9647700000000',DEMO_AUTH_CODE:'123456',PAYMENTS_MODE:'test',PAYMENTS_PROVIDER:'wayl',WAYL_ENV:'test',WAYL_API_TOKEN:'fake-private-key-for-tests',WAYL_WEBHOOK_SECRET:'private-test-webhook-secret-only-12345',PAYMENT_SITE_URL:origin} as unknown as SharedEnv;
+ for(const [id,phone,t,s] of [['customer','+9647700000000',token,session],['other','+9647711111111',otherToken,otherSession]]){
+  db.raw.prepare('INSERT INTO customers(id,phone,booking_token,created_at) VALUES(?,?,?,?)').run(id,phone,t,new Date().toISOString());db.raw.prepare('INSERT INTO customer_sessions(id,customer_id,expires) VALUES(?,?,?)').run(await hash(s),id,Math.floor(Date.now()/1000)+3600);db.raw.prepare('INSERT INTO devices(hash,revoked) VALUES(?,0)').run(await hash(t));
+ }
+ const id=crypto.randomUUID();db.raw.prepare("INSERT INTO bookings(id,device_hash,request_id,payload_hash,farm_id,farm_name,date,period,guests,customer_name,phone,notes,total,status,created_at,whatsapp_opt_in) VALUES(?,?,?,'test','fixture','اختبار',?,'evening',2,'اختبار','+9647700000000','',100000,'pending',?,0)").run(id,principal,id,date,new Date().toISOString());
+ const call=async(path:string,method='GET',cookie=session,requestOrigin=origin)=>{const r=await handleShared(new Request(origin+'/api/v2/'+path,{method,headers:{Cookie:'mazraaty_customer='+cookie,Origin:requestOrigin,'X-Device-Token':token}}),env);return {r,data:await r.json() as any}};
+ const previous=globalThis.fetch;let posts=0,queries=0;let link:any;
+ globalThis.fetch=(async(input,options)=>{
+  expect(String(input)).toStartWith('https://api.thewayl.com/api/v1/links');queries++;
+  if(options?.method==='POST'){posts++;const payload=JSON.parse(String(options.body));expect(payload.env).toBe('test');expect(payload.total).toBe(100000);link={...payload,id:'fake-provider-link',total:'100000',url:'https://checkout.thewayl.com/pay/FIXTURE',status:'Created',createdAt:new Date().toISOString()};return Response.json({data:link},{status:201})}
+  return link?Response.json({data:link}):new Response(null,{status:404});
+ }) as typeof fetch;
+ try{
+  expect(checkoutReadiness(env).mode).toBe('test');
+  expect((await call('bookings/'+id+'/payment','POST','')).r.status).toBe(401);
+  expect((await call('bookings/'+id+'/payment','POST',otherSession)).r.status).toBe(404);
+  expect((await call('bookings/'+id+'/payment','POST',session,'https://attacker.invalid')).r.status).toBe(403);
+  expect((await call('bookings/'+id+'/payment','POST')).r.status).toBe(503);expect(queries).toBe(0);
+  db.raw.prepare("UPDATE bookings SET status='confirmed' WHERE id=?").run(id);
+  const created=await call('bookings/'+id+'/payment','POST');expect(created.r.status).toBe(200);expect(created.data.payment.environment).toBe('test');expect(created.data.payment.amount).toBe(100000);expect(created.data.payment.url).toBe(link.url);expect(posts).toBe(1);
+  await call('bookings/'+id+'/payment','POST');expect(posts).toBe(1);expect(db.raw.query('SELECT COUNT(*) AS n FROM whatsapp_payment_outbox').get()).toEqual({n:0});
+  expect((await call('bookings/'+id+'/payment?paymentReturn=1&paid=true')).data.payment.status).toBe('awaiting_payment');
+  const listed=(await call('bookings')).data;expect(listed.checkout.mode).toBe('test');expect(listed.bookings[0].payment.environment).toBe('test');expect(listed.bookings[0].payment.url).toBeUndefined();
+  expect((await call('bookings/'+id+'/payment','GET',otherSession)).r.status).toBe(404);
+  const event={referenceId:link.referenceId,id:link.id,total:100000,paymentStatus:'paid'},raw=JSON.stringify(event),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(link.webhookSecret),{name:'HMAC',hash:'SHA-256'},false,['sign']),signature=Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(raw))),b=>b.toString(16).padStart(2,'0')).join('');
+  const webhook=async(sig=signature)=>handleShared(new Request(link.webhookUrl,{method:'POST',headers:{'x-wayl-signature-256':sig},body:raw}),env);
+  const queryCount=queries;expect((await webhook('0'.repeat(64))).status).toBe(403);expect(queries).toBe(queryCount);
+  expect((await webhook()).status).toBe(200);expect((await call('bookings/'+id+'/payment')).data.payment.status).toBe('awaiting_payment');
+  link.status='Complete';link.completedAt=new Date().toISOString();link.paymentMethod='Card';
+  expect((await call('bookings/'+id+'/payment','PATCH')).r.status).toBe(200);expect((await webhook()).status).toBe(200);expect((await call('bookings/'+id+'/payment')).data.payment).toMatchObject({status:'paid',environment:'test',url:null});expect(posts).toBe(1);
+  link.status='Returned';await call('bookings/'+id+'/payment','PATCH');expect((await call('bookings/'+id+'/payment')).data.payment.status).toBe('review_required');
+  expect(db.raw.prepare('SELECT status,total FROM bookings WHERE id=?').get(id)).toEqual({status:'confirmed',total:100000});
+ }finally{globalThis.fetch=previous;db.raw.close()}
+});
 test('payment lifecycle uses verified identity, consent, saved amount, single init, and at-most-once WhatsApp submission',async()=>{
  const db=new DB(),token='a'.repeat(64),principal=await hash(token),now=Math.floor(Date.now()/1000),date=new Date(Date.now()+10*86400000).toISOString().slice(0,10);
  db.raw.prepare('INSERT INTO customers(id,phone,booking_token,created_at) VALUES(?,?,?,?)').run('customer','+9647700000000',token,new Date().toISOString());
@@ -36,8 +72,9 @@ test('payment lifecycle uses verified identity, consent, saved amount, single in
  try{
   expect(checkoutReadiness(env).enabled).toBe(false); // No merchant adapter installed in deployment.
   expect(checkoutReadiness(env,provider).enabled).toBe(true);
-  await expect(createBookingCheckout(env,'no-consent',provider)).rejects.toThrow();expect(init).toBe(0);
-  await createBookingCheckout(env,'booking',provider);await createBookingCheckout(env,'booking',provider);expect(init).toBe(1);
+  await createBookingCheckout(env,'no-consent',provider);expect(init).toBe(1);
+  expect(db.raw.query("SELECT COUNT(*) AS n FROM whatsapp_payment_outbox q JOIN payment_requests p ON p.id=q.payment_id WHERE p.booking_id='no-consent'").get()).toEqual({n:0});
+  await createBookingCheckout(env,'booking',provider);await createBookingCheckout(env,'booking',provider);expect(init).toBe(2);
   const order=db.raw.query('SELECT * FROM payment_requests WHERE booking_id=?').get('booking') as any;
   expect(order.amount).toBe(100000);await Promise.all([dispatchPaymentWhatsApp(env),dispatchPaymentWhatsApp(env)]);expect(sends).toBe(1);expect(db.raw.query('SELECT status FROM whatsapp_payment_outbox WHERE payment_id=?').get(order.id)).toEqual({status:'accepted'});
   await expect(applyVerifiedPayment(env.DB!,{orderId:order.id,providerReference:order.provider_reference,amount:1,currency:'IQD',status:'paid'})).rejects.toThrow();
