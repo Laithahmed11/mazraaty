@@ -3,13 +3,14 @@ import type {SharedEnv} from './shared-api.server';
 import {phoneAuthReady} from './customer-auth.server';
 import {bookingEnd} from './booking-time';
 import {createWaylProvider} from './wayl.server';
+import {bookingPaymentPlan} from './payment';
 export type VerifiedPayment={orderId:string;providerReference:string;amount:number;currency:'IQD';status:'paid'|'expired'|'review_required'};
 /** Merchant-specific adapters must authenticate events and verify status server-to-server. */
 export interface PaymentProvider {
  name:'qi'|'zaincash'|'wayl';
  environment?:'test'|'live';
  allowedOrigins:readonly string[];
- createCheckout(value:{orderId:string;bookingId:string;amount:number;currency:'IQD';expiresAt?:number}):Promise<{reference:string;url:string;expires:number}>;
+ createCheckout(value:{orderId:string;bookingId:string;amount:number;currency:'IQD';expiresAt?:number;paymentPercent?:number}):Promise<{reference:string;url:string;expires:number}>;
  verifyEvent(request:Request):Promise<VerifiedPayment|null>;
  readPayment?(orderId:string):Promise<VerifiedPayment|null>;
 }
@@ -27,13 +28,13 @@ export const paymentBeforeConfirmation=(env:SharedEnv)=>env.BOOKING_CONFIRMATION
 export async function expireBookingHolds(db:D1Database){await db.prepare("UPDATE bookings SET status='expired' WHERE status='awaiting_payment' AND payment_required=1 AND hold_until<=?").bind(seconds()).run();}
 export function publicCheckout(env:SharedEnv){const r=checkoutReadiness(env);return {enabled:r.enabled,mode:r.mode,payBeforeConfirmation:paymentBeforeConfirmation(env),holdMinutes:15};}
 export async function paymentSummary(env:SharedEnv,bookingId:string){
- const row=await env.DB!.prepare('SELECT p.status,p.amount,p.environment,p.expires,p.checkout_url,b.status AS booking_status,b.hold_until,b.date,b.period FROM payment_requests p JOIN bookings b ON b.id=p.booking_id WHERE booking_id=?').bind(bookingId).first<{status:string;amount:number;environment:string;expires:number|null;checkout_url:string|null;booking_status:string;hold_until:number|null;date:string;period:string}>();
+ const row=await env.DB!.prepare('SELECT p.status,p.amount,p.environment,p.expires,p.checkout_url,b.total,b.payment_percent,b.status AS booking_status,b.hold_until,b.date,b.period FROM payment_requests p JOIN bookings b ON b.id=p.booking_id WHERE booking_id=?').bind(bookingId).first<{status:string;amount:number;environment:string;expires:number|null;checkout_url:string|null;total:number;payment_percent:number;booking_status:string;hold_until:number|null;date:string;period:string}>();
  if(!row)return null;
  const status=row.status==='awaiting_payment'&&(row.expires||0)<=seconds()?'expired':row.status;
  const enabled=checkoutReadiness(env).enabled;
  const eligible=row.booking_status==='confirmed'||(row.booking_status==='awaiting_payment'&&(row.hold_until||0)>seconds());
  const url=enabled&&row.environment===(env.WAYL_ENV||'live')&&eligible&&bookingEnd(row.date,row.period)>Date.now()&&status==='awaiting_payment'?row.checkout_url:null;
- return {status,amount:row.amount,environment:row.environment,expires:row.expires,url};
+ return {status,amount:row.amount,environment:row.environment,expires:row.expires,url,paymentPlan:bookingPaymentPlan(row.total,row.payment_percent)};
 }
 export async function reconcilePayment(env:SharedEnv,bookingId:string,provider:PaymentProvider|null=deploymentPaymentProvider(env)){
  if(!checkoutReadiness(env,provider).enabled||!provider?.readPayment)throw Error('الدفع قيد التفعيل.');
@@ -42,7 +43,7 @@ export async function reconcilePayment(env:SharedEnv,bookingId:string,provider:P
   const event=await provider.readPayment(order.id);if(event)await applyVerifiedPayment(env.DB!,event);
  }
 }
-type CheckoutBooking={id:string;device_hash:string;customer_name:string;phone:string;whatsapp_opt_in:number;status:string;total:number;date:string;period:string;farm_name:string;payment_required:number;hold_until:number|null};
+type CheckoutBooking={id:string;device_hash:string;customer_name:string;phone:string;whatsapp_opt_in:number;status:string;total:number;date:string;period:string;farm_name:string;payment_required:number;hold_until:number|null;payment_percent:number};
 export async function createBookingCheckout(env:SharedEnv,bookingId:string,provider:PaymentProvider|null=deploymentPaymentProvider(env)){
  if(!checkoutReadiness(env,provider).enabled||!provider)throw Error('الدفع والواتساب التلقائي قيد التفعيل.');
  const db=env.DB!,b=await db.prepare('SELECT * FROM bookings WHERE id=?').bind(bookingId).first<CheckoutBooking>();
@@ -53,10 +54,12 @@ export async function createBookingCheckout(env:SharedEnv,bookingId:string,provi
  if(b.status!=='confirmed'&&!holding)throw Error('انتهت مهلة الحجز أو الحجز غير متاح للدفع.');
  const account=await db.prepare('SELECT booking_token FROM customers WHERE phone=?').bind(b.phone).first<{booking_token:string}>();
  if(!account||await hash(account.booking_token)!==b.device_hash)throw Error('يلزم حساب هاتف موثّق لهذا الحجز.');
- const id=crypto.randomUUID(),insert=await db.prepare("INSERT OR IGNORE INTO payment_requests(id,booking_id,amount,provider,environment,status,created_at) VALUES(?,?,?,?,?,'creating',?)").bind(id,b.id,b.total,provider.name,provider.environment||'live',seconds()).run();
+ const plan=bookingPaymentPlan(b.total,b.payment_percent);
+ if(plan.online<1000)throw Error('مبلغ التثبيت أقل من الحد المدعوم للدفع.');
+ const id=crypto.randomUUID(),insert=await db.prepare("INSERT OR IGNORE INTO payment_requests(id,booking_id,amount,provider,environment,status,created_at) VALUES(?,?,?,?,?,'creating',?)").bind(id,b.id,plan.online,provider.name,provider.environment||'live',seconds()).run();
  if(!insert.meta.changes)return db.prepare('SELECT id,status FROM payment_requests WHERE booking_id=?').bind(b.id).first();
  try{
-   const checkout=await provider.createCheckout({orderId:id,bookingId:b.id,amount:b.total,currency:'IQD',...(holding?{expiresAt:b.hold_until!}:{})}),url=new URL(checkout.url);
+   const checkout=await provider.createCheckout({orderId:id,bookingId:b.id,amount:plan.online,currency:'IQD',paymentPercent:plan.percent,...(holding?{expiresAt:b.hold_until!}:{})}),url=new URL(checkout.url);
   if(url.protocol!=='https:'||url.username||url.password||!provider.allowedOrigins.includes(url.origin)||!checkout.reference||checkout.reference.length>180||!Number.isSafeInteger(checkout.expires)||checkout.expires<=seconds()||checkout.expires>seconds()+86400)throw Error('Invalid provider response');
   await db.batch([
    db.prepare("UPDATE payment_requests SET provider_reference=?,checkout_url=CASE WHEN EXISTS(SELECT 1 FROM bookings WHERE id=? AND phone<>'' AND (status='confirmed' OR (status='awaiting_payment' AND hold_until>?))) THEN ? ELSE NULL END,expires=?,status=CASE WHEN EXISTS(SELECT 1 FROM bookings WHERE id=? AND phone<>'' AND (status='confirmed' OR (status='awaiting_payment' AND hold_until>?))) THEN 'awaiting_payment' ELSE 'expired' END WHERE id=? AND status IN ('creating','cancelled','expired')").bind(checkout.reference,b.id,seconds(),checkout.url,Math.min(checkout.expires,b.hold_until||checkout.expires),b.id,seconds(),id),

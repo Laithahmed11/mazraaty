@@ -70,7 +70,7 @@ export function createWaylProvider(env:SharedEnv):PaymentProvider|null{
    if(!Number.isSafeInteger(minutes)||minutes<1||minutes>60)throw Error('Payment hold expired');
    let link=await api(path);
    if(!/^[a-zA-Z0-9-]{1,80}$/.test(value.bookingId))throw Error('Invalid booking');
-   if(!link){try{link=await api('/api/v1/links',{env:mode,referenceId:ref,total,currency:'IQD',lineItem:[{label:'Mazraaty farm reservation',amount:total,type:'increase'}],webhookUrl:webhook(value.orderId),webhookSecret:await hmac(secret,'webhook:'+ref),redirectionUrl:site+'/customer?booking='+value.bookingId+'&paymentReturn=1',customParameter:await proof(ref,total),linkExpiresIn:value.expiresAt===undefined?'1h':minutes+'m'})}catch{link=await api(path)}}
+   if(!link){try{link=await api('/api/v1/links',{env:mode,referenceId:ref,total,currency:'IQD',lineItem:[{label:value.paymentPercent===8?'Mazraaty booking confirmation fee':'Mazraaty farm reservation',amount:total,type:'increase'}],webhookUrl:webhook(value.orderId),webhookSecret:await hmac(secret,'webhook:'+ref),redirectionUrl:site+'/customer?booking='+value.bookingId+'&paymentReturn=1',customParameter:await proof(ref,total),linkExpiresIn:value.expiresAt===undefined?'1h':minutes+'m'})}catch{link=await api(path)}}
    await validate(link,value.orderId,total);
    // Never send an already paid/cancelled/recovered expired link to a customer.
    if(link!.status!=='Created')throw Error('Wayl link not open');

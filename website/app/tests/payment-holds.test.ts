@@ -16,9 +16,9 @@ async function fixture(){
  }
  db.raw.prepare("INSERT INTO farms(id,name,region,area,description,price,evening_price,capacity,amenities,images,published,updated_at) VALUES('farm','اختبار','بغداد','اختبار','اختبار',100000,150000,10,'مسبح','[\"/assets/standalone-farm.svg\"]',1,?)").run(new Date().toISOString());
  const call=async(path:string,method='GET',body?:unknown,session='b'.repeat(64))=>{const r=await handleShared(new Request(origin+'/api/v2/'+path,{method,headers:{Origin:origin,Cookie:'mazraaty_customer='+session,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}),env);return {r,data:await r.json() as any}};
- const book=(period='morning',session='b'.repeat(64),requestId=crypto.randomUUID())=>call('bookings','POST',{farmId:'farm',date,period,guests:2,name:'اختبار',phone:'07700000000',notes:'',expectedTotal:period==='morning'?100000:150000,requestId},session);
- let link:any,posts=0;const previous=globalThis.fetch;
- globalThis.fetch=(async(_input,options)=>{if(options?.method==='POST'){posts++;const payload=JSON.parse(String(options.body));link={...payload,id:'fixture-'+posts,total:String(payload.total),url:'https://checkout.thewayl.com/pay/FIXTURE',status:'Created',createdAt:new Date().toISOString()};return Response.json({data:link},{status:201})}return link?Response.json({data:link}):new Response(null,{status:404})}) as typeof fetch;
+ const book=(period='morning',session='b'.repeat(64),requestId=crypto.randomUUID())=>{const price=db.raw.query('SELECT price,evening_price FROM farms WHERE id=?').get('farm') as {price:number;evening_price:number};return call('bookings','POST',{farmId:'farm',date,period,guests:2,name:'اختبار',phone:'07700000000',notes:'',expectedTotal:period==='morning'?price.price:price.evening_price,requestId,paymentPercent:1,amount:1},session)};
+ let link:any,posts=0;const links=new Map<string,any>(),previous=globalThis.fetch;
+ globalThis.fetch=(async(_input,options)=>{if(options?.method==='POST'){posts++;const payload=JSON.parse(String(options.body));link={...payload,id:'fixture-'+posts,total:String(payload.total),url:'https://checkout.thewayl.com/pay/FIXTURE',status:'Created',createdAt:new Date().toISOString()};links.set(payload.referenceId,link);return Response.json({data:link},{status:201})}const current=links.get(decodeURIComponent(new URL(String(_input)).pathname.split('/').pop()!));return current?Response.json({data:current}):new Response(null,{status:404})}) as typeof fetch;
  return {db,env,date,call,book,get link(){return link},get posts(){return posts},close(){globalThis.fetch=previous;db.raw.close()}};
 }
 test('a payment hold atomically blocks only its period, rejects manual confirmation, and confirms once on verified payment',async()=>{
@@ -36,7 +36,7 @@ test('a payment hold atomically blocks only its period, rejects manual confirmat
   await f.call('bookings/'+b.id+'/payment','POST');expect(f.posts).toBe(1);
   expect((await f.call('bookings/'+b.id+'/payment?paid=true&paymentReturn=1')).data.payment.status).toBe('awaiting_payment');
   f.link.status='Complete';f.link.completedAt=new Date().toISOString();f.link.paymentMethod='Card';
-  const raw=JSON.stringify({referenceId:f.link.referenceId,id:f.link.id,total:100000}),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(f.link.webhookSecret),{name:'HMAC',hash:'SHA-256'},false,['sign']),sig=Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(raw))),b=>b.toString(16).padStart(2,'0')).join('');
+  const raw=JSON.stringify({referenceId:f.link.referenceId,id:f.link.id,total:Number(f.link.total)}),key=await crypto.subtle.importKey('raw',new TextEncoder().encode(f.link.webhookSecret),{name:'HMAC',hash:'SHA-256'},false,['sign']),sig=Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(raw))),b=>b.toString(16).padStart(2,'0')).join('');
   const webhook=()=>handleShared(new Request(f.link.webhookUrl,{method:'POST',headers:{'x-wayl-signature-256':sig},body:raw}),f.env);
   expect((await webhook()).status).toBe(200);expect((await webhook()).status).toBe(200);
   await f.call('bookings/'+b.id+'/payment','PATCH');await f.call('bookings/'+b.id+'/payment','PATCH');
@@ -45,6 +45,28 @@ test('a payment hold atomically blocks only its period, rejects manual confirmat
   expect(f.db.raw.prepare("SELECT COUNT(*) AS n FROM push_events WHERE booking_id=? AND kind='confirmed' AND role='customer'").get(b.id)).toEqual({n:1});
   expect(f.db.raw.prepare("SELECT COUNT(*) AS n FROM push_events WHERE booking_id=? AND kind='confirmed' AND role='owner'").get(b.id)).toEqual({n:1});
   expect(f.db.raw.prepare('SELECT COUNT(*) AS n FROM reserved_dates WHERE booking_id=?').get(b.id)).toEqual({n:1});
+ }finally{f.close()}
+});
+test('only the saved 8% booking fee goes to Wayl; the remaining 92% is cash and client amounts cannot override it',async()=>{
+ const f=await fixture();try{
+  f.db.raw.prepare('UPDATE farms SET price=250000,evening_price=400000 WHERE id=?').run('farm');
+  for(const [period,session,total,online,cash] of [['morning','b'.repeat(64),250000,20000,230000],['evening','d'.repeat(64),400000,32000,368000]] as const){
+   const b=(await f.book(period,session)).data.booking;expect(b.total).toBe(total);expect(b.paymentPlan).toEqual({percent:8,total,online,cash});
+   const payment=await f.call('bookings/'+b.id+'/payment','POST',undefined,session);expect(payment.data.payment.amount).toBe(online);expect(f.link.total).toBe(String(online));expect(f.link.lineItem[0].label).toBe('Mazraaty booking confirmation fee');
+   expect(()=>f.db.raw.prepare('UPDATE bookings SET payment_percent=100 WHERE id=?').run(b.id)).toThrow('Payment plan is already committed');
+   f.db.raw.prepare('UPDATE farms SET price=price+5000,evening_price=evening_price+5000 WHERE id=?').run('farm');
+   const saved=(await f.call('bookings/'+b.id+'/payment','GET',undefined,session)).data.payment;expect(saved.amount).toBe(online);
+   f.db.raw.prepare('UPDATE farms SET price=250000,evening_price=400000 WHERE id=?').run('farm');
+  }
+ }finally{f.close()}
+});
+test('non-round booking prices use whole IQD and unsupported tiny deposits are rejected before reserving or creating an order',async()=>{
+ const f=await fixture();try{
+  f.db.raw.prepare('UPDATE farms SET price=250001 WHERE id=?').run('farm');
+  const b=(await f.book()).data.booking;expect(b.paymentPlan).toEqual({percent:8,total:250001,online:20001,cash:230000});
+  await f.call('bookings/'+b.id+'/payment','POST');expect(f.link.total).toBe('20001');
+  f.db.raw.prepare('UPDATE farms SET evening_price=1000 WHERE id=?').run('farm');
+  const tiny=await f.book('evening','d'.repeat(64));expect(tiny.r.status).toBe(400);expect(f.db.raw.query("SELECT COUNT(*) AS n FROM bookings WHERE period='evening'").get()).toEqual({n:0});
  }finally{f.close()}
 });
 test('two competing booking submissions produce exactly one hold and leave the other period free',async()=>{
