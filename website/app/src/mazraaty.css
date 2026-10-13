@@ -596,6 +596,12 @@ html:has(.mz-app:not(.mz-owner)),body:has(.mz-app:not(.mz-owner)){background:#f5
 .mz-legal h1{font-size:32px}.mz-legal h2{font-size:22px;margin-top:28px}.mz-legal p{margin:12px 0}
 .mz-rating{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.mz-rating select{width:auto}
 .mz-brand img{border-radius:12px;object-fit:cover;flex-shrink:0}
+.mz-extra-editor{border:1px solid var(--mz-line);border-radius:18px;padding:18px;display:grid;gap:14px;min-width:0}
+.mz-extra-editor legend{font-weight:700;padding:0 8px}.mz-extra-details{display:grid;gap:12px;margin:18px 0}.mz-extra-details .mz-secondary{justify-self:start}
+.mz-offer-note{font-size:12px;color:var(--mz-accent);line-height:1.8}.mz-old-price{display:block;font-size:12px;font-weight:400;color:var(--mz-muted)}
+.mz-offers-filter[aria-pressed=true]{background:var(--mz-accent);color:var(--mz-white)}
+.mz-checkout-setup{border:1px solid var(--mz-line);border-radius:20px;padding:20px;margin:18px 0;display:grid;gap:10px;background:var(--mz-white)}
+.mz-checkout-setup ul{margin:0;padding-inline-start:24px;line-height:1.9}
 /* Compact discovery banner; the other tabs begin directly with their content. */
 .mz-app:not(.mz-owner) .mz-discover{min-height:300px;margin:8px 0 24px}
 .mz-app:not(.mz-owner) .mz-discover-copy{padding:24px;min-height:inherit}

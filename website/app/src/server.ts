@@ -4,6 +4,7 @@ import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { applySecurityHeaders } from "./lib/security-headers.server";
 import {dispatchPush} from './lib/push.server';
+import {dispatchCheckout} from './lib/checkout.server';
 import type {SharedEnv} from './lib/shared-api.server';
 
 type ServerEntry = {
@@ -43,6 +44,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 export default {
   async scheduled(_event:unknown,env:SharedEnv,ctx:{waitUntil:(p:Promise<unknown>)=>void}) {
     ctx.waitUntil(dispatchPush(env));
+    ctx.waitUntil(dispatchCheckout(env));
   },
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
@@ -52,6 +54,7 @@ export default {
       const response = await handler.fetch(request, env, ctx);
       if(request.method!=='GET'&&response.ok&&(ctx as {waitUntil?:(p:Promise<unknown>)=>void})?.waitUntil) {
         (ctx as {waitUntil:(p:Promise<unknown>)=>void}).waitUntil(dispatchPush(env as SharedEnv));
+        (ctx as {waitUntil:(p:Promise<unknown>)=>void}).waitUntil(dispatchCheckout(env as SharedEnv));
       }
       return applySecurityHeaders(await normalizeCatastrophicSsrResponse(response));
     } catch (error) {

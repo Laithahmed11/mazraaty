@@ -69,7 +69,7 @@ export async function withCustomerAuth(request:Request,env:SharedEnv,core:(r:Req
  return error(404,'المسار غير موجود.');
  }
  // Independent deployments never fall back to unverified device accounts.
- if((ready||env.REQUIRE_PHONE_AUTH==='true')&&(path==='bookings'||path==='device'||/^bookings\/[a-zA-Z0-9-]+\/cancel$/.test(path))){
+ if((ready||env.REQUIRE_PHONE_AUTH==='true')&&(path==='bookings'||path==='device'||/^bookings\/[a-zA-Z0-9-]+\/(?:cancel|whatsapp-consent)$/.test(path))){
  if(!ready)return error(503,'تسجيل الهاتف قيد التجهيز.');
  const c=await customer(request,env);if(!c)return error(401,'سجل الدخول برقم هاتفك حتى تشوف حجوزاتك أو ترسل طلباً.');const headers=new Headers(request.headers);headers.set('X-Device-Token',c.booking_token);let payload:string|undefined;
  if(path==='bookings'&&method==='POST'){const value=await input(request);value.phone=c.phone;payload=JSON.stringify(value);headers.delete('Content-Length');}

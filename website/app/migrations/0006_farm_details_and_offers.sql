@@ -1,0 +1,3 @@
+ALTER TABLE farms ADD COLUMN details TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE farms ADD COLUMN offer TEXT;
+ALTER TABLE bookings ADD COLUMN whatsapp_opt_in INTEGER NOT NULL DEFAULT 0 CHECK(whatsapp_opt_in IN (0,1));

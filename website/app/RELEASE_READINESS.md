@@ -4,6 +4,9 @@ The Android preview has received offers and booking-created/confirmed/cancelled 
 
 ## Implemented preparation
 
+- 13 October additions: structured farm details, map link, administration-review badge, dated morning/evening offers, immutable server booking amounts and per-booking WhatsApp consent/withdrawal. Payment and automatic WhatsApp state/outbox preparation is documented in `PAYMENTS_PREPARATION.md`; the merchant adapter and account activation remain absent. No real payments or payment WhatsApp messages are enabled.
+- Dependency triage is recorded in `SECURITY_AUDIT.md`: Seroval runtime advisories patched; remaining tooling findings require follow-up before paid launch.
+
 - The customer brand/header remains shared across Explore, Favorites and Bookings. The compact discovery banner appears only in Explore; the other tabs begin directly with their content. Account, push preferences and account deletion are accessible from the header.
 - Existing favorites/search/region/price/capacity/service filters remain. Ratings are stars only, after the verified account's confirmed booking has ended in Baghdad time; cancellation/rejection and another account cannot rate.
 - Public `/privacy`, `/terms`, `/support`, `/delete-account` pages; immediate in-app deletion and an external email request path. Published contact information is the existing operator contact. The operator must actually meet the stated response/deletion deadlines.
