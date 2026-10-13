@@ -4,7 +4,7 @@ The Android preview has received offers and booking-created/confirmed/cancelled 
 
 ## Implemented preparation
 
-- 13 October additions: structured farm details, map link, administration-review badge, dated morning/evening offers, immutable server booking amounts and per-booking WhatsApp consent/withdrawal. Payment and automatic WhatsApp state/outbox preparation is documented in `PAYMENTS_PREPARATION.md`; the merchant adapter and account activation remain absent. No real payments or payment WhatsApp messages are enabled.
+- 13 October additions: structured farm details, map link, administration-review badge, dated morning/evening offers, immutable server booking amounts and per-booking WhatsApp consent/withdrawal. Payment and automatic WhatsApp state/outbox preparation is documented in `PAYMENTS_PREPARATION.md`. The Wayl adapter is implemented and the existing merchant credential passed a read-only connection check; actual sandbox checkout/callback validation, operational cancellation/refund rules and account activation remain pending. No real payments or payment WhatsApp messages are enabled.
 - Dependency triage is recorded in `SECURITY_AUDIT.md`: Seroval runtime advisories patched; remaining tooling findings require follow-up before paid launch.
 
 - The customer brand/header remains shared across Explore, Favorites and Bookings. The compact discovery banner appears only in Explore; the other tabs begin directly with their content. Account, push preferences and account deletion are accessible from the header.

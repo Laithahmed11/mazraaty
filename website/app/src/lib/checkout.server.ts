@@ -2,26 +2,26 @@ import type {D1Database} from '@cloudflare/workers-types';
 import type {SharedEnv} from './shared-api.server';
 import {phoneAuthReady} from './customer-auth.server';
 import {bookingEnd} from './booking-time';
+import {createWaylProvider} from './wayl.server';
 export type VerifiedPayment={orderId:string;providerReference:string;amount:number;currency:'IQD';status:'paid'|'expired'};
 /** Merchant-specific adapters must authenticate events and verify status server-to-server. */
 export interface PaymentProvider {
- name:'qi'|'zaincash';
+ name:'qi'|'zaincash'|'wayl';
+ environment?:'test'|'live';
  allowedOrigins:readonly string[];
  createCheckout(value:{orderId:string;bookingId:string;amount:number;currency:'IQD'}):Promise<{reference:string;url:string;expires:number}>;
- verifyEvent(request:Request):Promise<VerifiedPayment>;
+ verifyEvent(request:Request):Promise<VerifiedPayment|null>;
 }
-// Deliberately uninstalled: operator requested preparation, with account setup pending.
-// Installing an adapter requires the selected merchant's API contract and test credentials.
-export const deploymentPaymentProvider:PaymentProvider|null=null;
+export const deploymentPaymentProvider=(env:SharedEnv)=>createWaylProvider(env);
 const seconds=()=>Math.floor(Date.now()/1000);
 const hash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join('');
 export function whatsappReady(env:SharedEnv){return env.APP_ENV==='production'&&env.WHATSAPP_ENABLED==='true'&&phoneAuthReady(env)&&/^whatsapp:\+[1-9]\d{7,14}$/.test(env.TWILIO_WHATSAPP_FROM||'')&&/^HX[a-f0-9]{32}$/i.test(env.TWILIO_WHATSAPP_TEMPLATE_SID||'');}
-export function checkoutReadiness(env:SharedEnv,provider:PaymentProvider|null=deploymentPaymentProvider){
- const checks={production:env.APP_ENV==='production',phone:phoneAuthReady(env),paymentProvider:!!provider,paymentActivation:env.PAYMENTS_MODE==='live',whatsapp:whatsappReady(env)};
+export function checkoutReadiness(env:SharedEnv,provider:PaymentProvider|null=deploymentPaymentProvider(env)){
+ const checks={production:env.APP_ENV==='production',phone:phoneAuthReady(env),paymentProvider:!!provider,paymentActivation:env.PAYMENTS_MODE==='live'&&provider?.environment!=='test',whatsapp:whatsappReady(env)};
  return {enabled:Object.values(checks).every(Boolean),checks};
 }
 type CheckoutBooking={id:string;device_hash:string;customer_name:string;phone:string;whatsapp_opt_in:number;status:string;total:number;date:string;period:string;farm_name:string};
-export async function createBookingCheckout(env:SharedEnv,bookingId:string,provider:PaymentProvider|null=deploymentPaymentProvider){
+export async function createBookingCheckout(env:SharedEnv,bookingId:string,provider:PaymentProvider|null=deploymentPaymentProvider(env)){
  if(!checkoutReadiness(env,provider).enabled||!provider)throw Error('الدفع والواتساب التلقائي قيد التفعيل.');
  const db=env.DB!,b=await db.prepare('SELECT * FROM bookings WHERE id=?').bind(bookingId).first<CheckoutBooking>();
  if(!b||b.status!=='confirmed'||!b.customer_name||!b.whatsapp_opt_in||bookingEnd(b.date,b.period)<=Date.now())throw Error('الرابط متاح لحجز مؤكد قادم مع موافقة الزبون على واتساب.');

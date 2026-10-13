@@ -3,7 +3,8 @@ import {pushEndpoint,pushReady} from "./push.server";
 import {validateFarmDetails,validateFarmOffer,farmPrice} from "./farm-details";
 import {checkoutReadiness,createBookingCheckout,deploymentPaymentProvider,applyVerifiedPayment} from './checkout.server';
 import type {D1Database,R2Bucket} from "@cloudflare/workers-types";
-export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string;APP_ENV?:string;DEMO_AUTH_HOST?:string;DEMO_AUTH_PHONE?:string;DEMO_AUTH_CODE?:string;PUSH_ENABLED?:string;FCM_PROJECT_ID?:string;FCM_CLIENT_EMAIL?:string;FCM_PRIVATE_KEY?:string;PAYMENTS_MODE?:string;WHATSAPP_ENABLED?:string;TWILIO_WHATSAPP_FROM?:string;TWILIO_WHATSAPP_TEMPLATE_SID?:string};
+import {boundedBytes} from './wayl.server';
+export type SharedEnv={DB?:D1Database;STORAGE?:R2Bucket;ADMIN_PASSWORD?:string;TWILIO_ACCOUNT_SID?:string;TWILIO_AUTH_TOKEN?:string;TWILIO_VERIFY_SERVICE_SID?:string;REQUIRE_PHONE_AUTH?:string;APP_ENV?:string;DEMO_AUTH_HOST?:string;DEMO_AUTH_PHONE?:string;DEMO_AUTH_CODE?:string;PUSH_ENABLED?:string;FCM_PROJECT_ID?:string;FCM_CLIENT_EMAIL?:string;FCM_PRIVATE_KEY?:string;PAYMENTS_MODE?:string;WHATSAPP_ENABLED?:string;TWILIO_WHATSAPP_FROM?:string;TWILIO_WHATSAPP_TEMPLATE_SID?:string;PAYMENTS_PROVIDER?:string;WAYL_API_TOKEN?:string;WAYL_WEBHOOK_SECRET?:string;WAYL_ENV?:string;WAYL_LIVE_APPROVED?:string;PAYMENT_SITE_URL?:string};
 class Problem extends Error{constructor(public status:number,public code:string,message:string){super(message);}}
 const fail=(status:number,code:string,message:string):never=>{throw new Problem(status,code,message);};
 const digest=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,"0")).join("");
@@ -34,11 +35,13 @@ async function handleCore(request:Request,env:SharedEnv):Promise<Response>{
  try{
   const url=new URL(request.url),path=url.pathname.replace(/^\/api\/v2\/?/,""),method=request.method,db=dbOf(env);
   if(path==='payments/webhook'&&method==='POST'){
-   if(!checkoutReadiness(env).enabled||!deploymentPaymentProvider)return fail(503,'checkout_not_ready','الدفع قيد التفعيل.');
-   if(Number(request.headers.get('Content-Length')||0)>16384||(await request.clone().text()).length>16384)return fail(413,'too_large','حجم الطلب كبير.');
-   let event;try{event=await deploymentPaymentProvider.verifyEvent(request);}catch{return fail(403,'invalid_payment_event','تعذر التحقق من إشعار الدفع.');}
+   const provider=deploymentPaymentProvider(env);
+   if(!checkoutReadiness(env,provider).enabled||!provider)return fail(503,'checkout_not_ready','الدفع قيد التفعيل.');
+   let raw;try{raw=await boundedBytes(request)}catch{return fail(413,'too_large','حجم الطلب كبير.');}
+   let event;try{event=await provider.verifyEvent(new Request(request.url,{method:'POST',headers:request.headers,body:raw}));}catch{return fail(403,'invalid_payment_event','تعذر التحقق من إشعار الدفع.');}
+   if(!event)return response({received:true});
    const order=await db.prepare('SELECT provider FROM payment_requests WHERE id=?').bind(event.orderId).first<{provider:string}>();
-   if(order?.provider!==deploymentPaymentProvider.name)return fail(400,'payment_mismatch','إشعار الدفع غير مطابق.');
+   if(order?.provider!==provider.name)return fail(400,'payment_mismatch','إشعار الدفع غير مطابق.');
    try{await applyVerifiedPayment(db,event);}catch{return fail(400,'payment_mismatch','إشعار الدفع غير مطابق.');}
    return response({received:true});
   }

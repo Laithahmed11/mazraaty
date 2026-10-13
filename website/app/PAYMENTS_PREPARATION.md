@@ -14,7 +14,11 @@ Operator decision, 13 October 2026: prepare payment integration but leave it ina
 
 ## Intentionally pending
 
-`deploymentPaymentProvider` is explicitly `null`. This is a preparation boundary, not a working Qi/ZainCash integration. Setting environment variables alone does NOT install an adapter or activate charging. The operator has not chosen a merchant provider or supplied merchant credentials/API contract.
+13 October update: the operator selected Wayl using the existing Safi merchant account. `src/lib/wayl.server.ts` now implements the official Wayl API contract. After explicit approval, an additional dedicated Mazraaty API token was created on that same account and verified with HTTP 200 from `GET /api/v1/verify-auth-key`. It is saved only in ignored local configuration and preview Worker secrets. Safi's original token and settings were not changed. A separate random Mazraaty webhook secret is used; neither value is committed or sent to the browser.
+
+Wayl references use `mazraaty-test-<payment UUID>` / `mazraaty-live-<payment UUID>`; they cannot consume Safi's `wix-*` references. Checkout uses the immutable saved IQD amount, a one-hour hosted link, authenticated API lookup before creation and after an ambiguous create response, separate derived webhook secrets and signed metadata. Raw-body HMAC authentication precedes independent status/amount/reference/metadata inquiry. Redirects never mark payments paid. Pending provider events are acknowledged without changing payment status. Returned/refund states require operator review; automatic refunds are not implemented.
+
+Preview uses `WAYL_ENV=test`, `PAYMENTS_MODE=disabled` and `WAYL_LIVE_APPROVED=false`. No link was created and no payment was collected in the account connection check. Unit tests use fake API responses; actual sandbox checkout and authenticated callback acceptance still need testing before activation. A sandbox adapter cannot activate charging even if `PAYMENTS_MODE=live` is set. Live adapter installation additionally requires production and explicit `WAYL_LIVE_APPROVED=true` after the remaining launch checks.
 
 No production WhatsApp sender or template is registered here. The pipeline runs only on a production environment with real phone verification, a merchant adapter, `PAYMENTS_MODE=live`, `WHATSAPP_ENABLED=true`, and privately configured Twilio sender/template credentials. Preview cannot send payment messages even if these activation variables are set accidentally.
 
@@ -22,19 +26,19 @@ The automatic path is: customer submits request → administration confirms/rese
 
 ## Activation steps
 
-1. Select Qi or ZainCash and obtain its actual merchant integration contract and sandbox credentials privately. Do not collect card numbers in Mazraaty.
-2. Implement the concrete `PaymentProvider` adapter in `src/lib/checkout.server.ts` (or a separate provider module), including idempotency, fixed checkout origins, authenticated callbacks AND server-to-server status/amount/reference inquiry. Never infer an API endpoint or trust a redirect JWT without verification. Register a callback URL with the provider as required.
+1. Use the selected Wayl merchant account, preferably with a dedicated Mazraaty API token. Verify merchant approval for the Mazraaty business/domain. Do not collect card numbers in Mazraaty.
+2. Exercise the implemented Wayl adapter against the provider sandbox, including authenticated callbacks at `/api/v2/payments/webhook?order=<payment UUID>` in a separately controlled sandbox harness. The preview customer payment endpoint remains disabled. Keep the separate webhook secret private; never reuse Safi callback URLs or keys. Do not set live approval until the sandbox and operational checks below pass.
 3. Test payment success/failure, duplicate/reordered callbacks, timeout, expired link, cancellation before/after payment and account erasure in the provider sandbox. Implement hosted-link cancellation so accepted WhatsApp messages cannot cause stale charges.
 4. Register an approved WhatsApp Business sender with Twilio/Meta, collect opt-in, and obtain an approved utility template using the variable contract above. Establish delivery callbacks with authenticated Twilio signatures before claiming delivered status. Unknown sends require provider reconciliation before retry.
 5. Decide full payment versus deposit, unpaid reservation expiry, refund amounts/deadlines and responsibility. The current preparation does not invent these terms. Payment confirmation does not bypass slot conflicts or re-open a cancelled booking.
 6. Update policies for the actual provider/Meta processing and retention, finish production SMS and account configuration, and obtain operator approval before activating paid integrations.
 7. Keep preview and launch D1/R2 separate. Apply additive migrations only to the intended new environment; never copy customer/test records or overwrite existing production data for tests.
 
-Private configuration names (placeholders only): `PAYMENTS_MODE`, `WHATSAPP_ENABLED`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, `TWILIO_WHATSAPP_FROM`, `TWILIO_WHATSAPP_TEMPLATE_SID`. The sender must belong to the configured Twilio account; the template must be approved for the actual checkout domain.
+Private configuration names (placeholders only): `PAYMENTS_PROVIDER=wayl`, `WAYL_ENV=test`, `WAYL_LIVE_APPROVED=false`, `WAYL_API_TOKEN`, `WAYL_WEBHOOK_SECRET`, `PAYMENT_SITE_URL`, `PAYMENTS_MODE`, `WHATSAPP_ENABLED`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, `TWILIO_WHATSAPP_FROM`, `TWILIO_WHATSAPP_TEMPLATE_SID`. Tokens and webhook secrets belong in Worker secrets, never public vars or GitHub. The sender must belong to the configured Twilio account; the template must be approved for the actual checkout domain. Test and production use distinct references/secrets; only the two configured Mazraaty Worker origins are accepted until a custom domain is reviewed.
 
 ## Official references
 
-- https://docs.zaincash.iq/ — returned checkout URL, transaction inquiry, callback authentication.
+- https://wayl.io/docs and https://api.thewayl.com/openapi.v1.json — link creation, reference lookup, expiry, raw-body HMAC and merchant authentication.
 - https://www.twilio.com/docs/messaging/api/message-resource — Messages API, channel addresses, ContentSid/ContentVariables and validity period.
 - https://www.twilio.com/docs/whatsapp/key-concepts — WhatsApp customer-service windows and approved templates.
 

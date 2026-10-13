@@ -26,7 +26,7 @@ Copy `.dev.vars.example` to `.dev.vars` only in a local environment. Set actual 
 - `ADMIN_PASSWORD`: a unique administration password, at least 16 characters.
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`: your Twilio Verify account/service credentials. Without configured phone authentication, the server retains legacy device-scoped bookings. Test-only Twilio accounts can send only to approved tester numbers.
 
-The site is independent of Wix. Payment through QI remains deferred; confirmation does not charge a customer.
+The site is independent of Wix. Wayl payment integration is prepared with the selected merchant account; activation remains disabled and confirmation does not charge a customer. See `website/app/PAYMENTS_PREPARATION.md` for private configuration and pending sandbox/launch checks.
 
 GitHub push does not update the running Higgsfield site. To deploy there, use its project checkout/push/deploy workflow against the original project. Do not create a replacement project or expose the administration secret in client code.
 
