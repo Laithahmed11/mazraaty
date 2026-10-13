@@ -43,4 +43,13 @@ Private configuration names (placeholders only): `PAYMENTS_PROVIDER=wayl`, `WAYL
 - https://www.twilio.com/docs/messaging/api/message-resource — Messages API, channel addresses, ContentSid/ContentVariables and validity period.
 - https://www.twilio.com/docs/whatsapp/key-concepts — WhatsApp customer-service windows and approved templates.
 
-Validation: `bun run test:product`, `bun run typecheck`, `bun run build`, `bun run test:worker`. Tests use an in-memory database and fake merchant/provider responses; they are not a successful live payment or WhatsApp delivery test.
+## Sandbox acceptance evidence — 14 October 2026, Baghdad
+
+- The deployed preview created a real Wayl `env=test` hosted link from an authenticated customer booking, at the saved 250,000 IQD amount, without WhatsApp opt-in. Reopening the in-app button reused the same provider link.
+- The hosted page explicitly displayed simulation mode. Wayl's published dummy decline card left the booking unpaid; its dummy success card completed the same link without real money movement.
+- Actual signed provider callbacks returned HTTP 200. The customer returned automatically to `حجوزاتي`; independent server inquiry also returned HTTP 200 and the app showed a paid **test** receipt. Provider return URLs append additional query text; their presence triggers verification only and never proves payment.
+- A Cloudflare-specific outbound request failure was reproduced during acceptance. Explicit JSON Accept headers and manual redirects resolved the provider request; redirects never receive merchant credentials. Earlier ambiguous QA orders were preserved for review instead of blindly creating second references. Logs record only failure class/HTTP status, not tokens, provider bodies or personal data.
+- Mobile width 390: no document overflow; the existing Liquid Glass header and booking layout remain. Android test APK v8 (0.6.3) compiles with exact HTTPS Wayl checkout paths opening in the system browser; physical-device checkout return still needs operator acceptance.
+- QA bookings are cancelled after acceptance to release their morning slots; existing customer bookings and farms are not edited for this cleanup. Test payment history remains identifiable by its environment. No real payment or payment WhatsApp was sent.
+
+Validation: `bun run test:product`, `bun run typecheck`, `bun run build`, `bun run test:worker`. Unit tests use an in-memory database and fake provider responses; the distinct sandbox evidence above is not a live-payment or WhatsApp-delivery certification.

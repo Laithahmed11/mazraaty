@@ -38,10 +38,11 @@ export function createWaylProvider(env:SharedEnv):PaymentProvider|null{
  const webhook=(id:string)=>site+'/api/v2/payments/webhook?order='+id;
  const proof=async(ref:string,total:number)=>hmac(secret,'metadata:'+ref+':'+total+':IQD');
  async function api(path:string,body?:unknown):Promise<Link|null>{
-  const response=await fetch(API+path,{method:body?'POST':'GET',redirect:'error',headers:{'X-WAYL-AUTHENTICATION':token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});
+  let response:Response;
+  try{response=await fetch(API+path,{method:body?'POST':'GET',redirect:'manual',headers:{'X-WAYL-AUTHENTICATION':token,'Content-Type':'application/json',Accept:'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});}catch(error){console.warn('Wayl fetch failed',error instanceof Error?error.name:'unknown');throw error;}
   if(!body&&response.status===404)return null;
   if(!response.ok){console.warn('Wayl API failed',response.status);throw Error('Wayl request failed');}
-  const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await boundedBytes(response,65536)));
+  let data;try{data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(await boundedBytes(response,65536)));}catch(error){console.warn('Wayl decode failed',error instanceof Error?error.name:'unknown');throw error;}
   if(!data?.data||typeof data.data!=='object'||Array.isArray(data.data))throw Error('Invalid Wayl response');return data.data;
  }
  async function validate(link:Link|null,id:string,total?:number){

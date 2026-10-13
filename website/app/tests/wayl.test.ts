@@ -5,6 +5,11 @@ import type {SharedEnv} from '../src/lib/shared-api.server';
 const id='12345678-1234-4234-8234-123456789abc';
 const env:SharedEnv={APP_ENV:'preview',PAYMENTS_MODE:'disabled',PAYMENTS_PROVIDER:'wayl',WAYL_ENV:'test',WAYL_API_TOKEN:'fake-private-test-merchant-token',WAYL_WEBHOOK_SECRET:'fake-webhook-secret-for-unit-tests-only',PAYMENT_SITE_URL:'https://mazraati-preview.laithlaith500.workers.dev'};
 const mac=async(secret:string,raw:string)=>{const enc=new TextEncoder(),key=await crypto.subtle.importKey('raw',enc.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,enc.encode(raw))),b=>b.toString(16).padStart(2,'0')).join('')};
+test('Wayl API redirects are rejected without forwarding merchant credentials',async()=>{
+ const previous=globalThis.fetch;let calls=0;
+ globalThis.fetch=(async(input,options)=>{calls++;expect(String(input)).toStartWith('https://api.thewayl.com/');expect(options?.redirect).toBe('manual');return new Response(null,{status:302,headers:{Location:'https://attacker.invalid/collect'}})}) as typeof fetch;
+ try{await expect(createWaylProvider(env)!.createCheckout({orderId:id,bookingId:'booking',amount:100000,currency:'IQD'})).rejects.toThrow('Wayl request failed');expect(calls).toBe(1)}finally{globalThis.fetch=previous}
+});
 test('Wayl account configuration stays disabled in preview and sandbox cannot activate charges',async()=>{
  expect(createWaylProvider({...env,WAYL_API_TOKEN:''})).toBeNull();
  expect(createWaylProvider({...env,WAYL_ENV:'live'})).toBeNull();
@@ -22,7 +27,7 @@ test('Wayl isolates Safi references, verifies exact HMAC and independently check
  let link:any,posts=0,gets=0,ambiguous=false;
  globalThis.fetch=(async(input:any,init:any)=>{
   expect(String(input).startsWith('https://api.thewayl.com/api/v1/links')).toBe(true);
-  expect(init.headers['X-WAYL-AUTHENTICATION']).toBe(env.WAYL_API_TOKEN);expect(init.redirect).toBe('error');
+  expect(init.headers['X-WAYL-AUTHENTICATION']).toBe(env.WAYL_API_TOKEN);expect(init.redirect).toBe('manual');expect(init.headers.Accept).toBe('application/json');
   if(init.method==='POST'){
    posts++;const payload=JSON.parse(init.body);expect(payload.env).toBe('test');expect(payload.referenceId).toBe('mazraaty-test-'+id);expect(payload.total).toBe(100000);expect(payload.lineItem[0].amount).toBe(100000);expect(payload.linkExpiresIn).toBe('1h');expect(payload.webhookSecret).not.toBe(env.WAYL_API_TOKEN);
    link={...payload,id:'wayl-test-link',total:'100000',status:'Created',url:'https://checkout.thewayl.com/pay?code=UNITTEST',createdAt:new Date().toISOString()};

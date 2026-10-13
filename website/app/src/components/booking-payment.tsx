@@ -10,7 +10,7 @@ export function BookingPayment({bookingId,amount,status,upcoming,owner,checkout,
  async function check(){if(busy)return;setBusy(true);setError('');try{await request('PATCH');await refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  useEffect(()=>{
   const p=new URLSearchParams(window.location.search);
-  if(!owner&&checkout.enabled&&!checkedReturn.current&&p.get('booking')===bookingId&&p.get('paymentReturn')==='1'){
+  if(!owner&&checkout.enabled&&!checkedReturn.current&&p.get('booking')===bookingId&&p.has('paymentReturn')){
    checkedReturn.current=true;void check();
   }
  },[bookingId,owner,checkout.enabled]);
@@ -25,7 +25,7 @@ export function BookingPayment({bookingId,amount,status,upcoming,owner,checkout,
  if(!payment&&(status!=='confirmed'||!upcoming))return null;
  const test=payment?.environment==='test'||checkout.mode==='test',canPay=!owner&&checkout.enabled&&status==='confirmed'&&upcoming&&(!payment||payment.status==='awaiting_payment');
  return <section className="mz-booking-payment" aria-label="دفع الحجز">
-  <div className="mz-row"><strong>{payment?paymentLabels[payment.status]||'جاري مراجعة الدفع':'دفع الحجز'}</strong><span>{new Intl.NumberFormat('ar-IQ').format(payment?.amount??amount)} د.ع.</span></div>
+  <div className="mz-row"><strong>{payment?payment.status==='paid'&&test?'تم الدفع التجريبي':paymentLabels[payment.status]||'جاري مراجعة الدفع':'دفع الحجز'}</strong><span>{new Intl.NumberFormat('ar-IQ').format(payment?.amount??amount)} د.ع.</span></div>
   {test&&<p className="mz-payment-test">تجربة ويل فقط — لا يمثل هذا إيصال دفع حقيقي. لا تستخدم بيانات بطاقة حقيقية.</p>}
   {!payment&&!checkout.enabled&&<p className="mz-muted">الدفع الإلكتروني قيد التفعيل؛ تأكيد الحجز لا يخصم مبلغاً.</p>}
   {payment?.status==='review_required'&&<p className="mz-muted">لا تدفع مرة ثانية. تواصل مع الإدارة لمراجعة العملية.</p>}
