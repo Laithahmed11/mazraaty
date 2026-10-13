@@ -42,7 +42,9 @@ test('a payment hold atomically blocks only its period, rejects manual confirmat
   await f.call('bookings/'+b.id+'/payment','PATCH');await f.call('bookings/'+b.id+'/payment','PATCH');
   const saved=f.db.raw.prepare('SELECT status FROM bookings WHERE id=?').get(b.id);expect(saved).toEqual({status:'confirmed'});
   expect(f.db.raw.prepare('SELECT status FROM payment_requests WHERE booking_id=?').get(b.id)).toEqual({status:'paid'});
-  expect(f.db.raw.prepare("SELECT COUNT(*) AS n FROM push_events WHERE booking_id=? AND kind='confirmed'").get(b.id)).toEqual({n:1});expect(f.db.raw.prepare('SELECT COUNT(*) AS n FROM reserved_dates WHERE booking_id=?').get(b.id)).toEqual({n:1});
+  expect(f.db.raw.prepare("SELECT COUNT(*) AS n FROM push_events WHERE booking_id=? AND kind='confirmed' AND role='customer'").get(b.id)).toEqual({n:1});
+  expect(f.db.raw.prepare("SELECT COUNT(*) AS n FROM push_events WHERE booking_id=? AND kind='confirmed' AND role='owner'").get(b.id)).toEqual({n:1});
+  expect(f.db.raw.prepare('SELECT COUNT(*) AS n FROM reserved_dates WHERE booking_id=?').get(b.id)).toEqual({n:1});
  }finally{f.close()}
 });
 test('two competing booking submissions produce exactly one hold and leave the other period free',async()=>{
@@ -65,6 +67,17 @@ test('hold expiry frees the slot and a late paid order never resurrects it over 
   expect(f.db.raw.prepare('SELECT booking_id FROM reserved_dates WHERE farm_id=? AND date=? AND period=?').get('farm',f.date,'morning')).toEqual({booking_id:second.id});
   expect((await f.call('bookings/'+b.id+'/payment','POST')).data.payment.url).toBeNull();
  }finally{f.close()}
+});
+test('confirmation uses the database deadline even when the request clock predates expiry',async()=>{
+ const f=await fixture(),realNow=Date.now;try{
+  const b=(await f.book()).data.booking;await f.call('bookings/'+b.id+'/payment','POST');
+  f.db.raw.prepare('UPDATE bookings SET hold_until=unixepoch()-1 WHERE id=?').run(b.id);
+  f.link.status='Complete';f.link.completedAt=new Date().toISOString();f.link.paymentMethod='Card';
+  Date.now=()=>realNow()-60000; // A stale request timestamp cannot override SQL's current deadline.
+  await f.call('bookings/'+b.id+'/payment','PATCH');
+  expect(f.db.raw.prepare('SELECT status FROM payment_requests WHERE booking_id=?').get(b.id)).toEqual({status:'review_required'});
+  expect(f.db.raw.prepare('SELECT status FROM bookings WHERE id=?').get(b.id)).not.toEqual({status:'confirmed'});
+ }finally{Date.now=realNow;f.close()}
 });
 test('cancellation and account erasure release unpaid holds; legacy bookings and disabled checkout keep their existing behavior',async()=>{
  const f=await fixture();try{
