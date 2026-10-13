@@ -65,15 +65,19 @@ export function createWaylProvider(env:SharedEnv):PaymentProvider|null{
   readPayment,
   async createCheckout(value){
    const total=amount(value.amount);if(value.currency!=='IQD')throw Error('Invalid currency');
-   const ref=reference(value.orderId),path='/api/v1/links/'+encodeURIComponent(ref);
+   const ref=reference(value.orderId),path='/api/v1/links/'+encodeURIComponent(ref),now=Math.floor(Date.now()/1000);
+   const minutes=value.expiresAt===undefined?60:Math.floor((value.expiresAt-now-30)/60);
+   if(!Number.isSafeInteger(minutes)||minutes<1||minutes>60)throw Error('Payment hold expired');
    let link=await api(path);
    if(!/^[a-zA-Z0-9-]{1,80}$/.test(value.bookingId))throw Error('Invalid booking');
-   if(!link){try{link=await api('/api/v1/links',{env:mode,referenceId:ref,total,currency:'IQD',lineItem:[{label:'Mazraaty farm reservation',amount:total,type:'increase'}],webhookUrl:webhook(value.orderId),webhookSecret:await hmac(secret,'webhook:'+ref),redirectionUrl:site+'/customer?booking='+value.bookingId+'&paymentReturn=1',customParameter:await proof(ref,total),linkExpiresIn:'1h'})}catch{link=await api(path)}}
+   if(!link){try{link=await api('/api/v1/links',{env:mode,referenceId:ref,total,currency:'IQD',lineItem:[{label:'Mazraaty farm reservation',amount:total,type:'increase'}],webhookUrl:webhook(value.orderId),webhookSecret:await hmac(secret,'webhook:'+ref),redirectionUrl:site+'/customer?booking='+value.bookingId+'&paymentReturn=1',customParameter:await proof(ref,total),linkExpiresIn:value.expiresAt===undefined?'1h':minutes+'m'})}catch{link=await api(path)}}
    await validate(link,value.orderId,total);
    // Never send an already paid/cancelled/recovered expired link to a customer.
    if(link!.status!=='Created')throw Error('Wayl link not open');
-   const created=Date.parse(link!.createdAt),expires=Math.floor(created/1000)+3600,now=Math.floor(Date.now()/1000);
-   if(!Number.isFinite(created)||expires<=now||expires>now+3660)throw Error('Wayl link expired');
+   const duration=(link as Link & {linkExpiresIn?:string}).linkExpiresIn;
+   const match=duration?.match(/^(\d+)(m|h|d)$/),ttl=match?Number(match[1])*({m:60,h:3600,d:86400}[match[2] as 'm'|'h'|'d']):minutes*60;
+   const created=Date.parse(link!.createdAt),expires=Math.min(Math.floor(created/1000)+ttl,value.expiresAt??Infinity);
+   if(!Number.isFinite(created)||expires<=Math.floor(Date.now()/1000)||expires>now+3660)throw Error('Wayl link expired');
    return {reference:link!.id,url:link!.url,expires};
   },
   async verifyEvent(request):Promise<VerifiedPayment|null>{
