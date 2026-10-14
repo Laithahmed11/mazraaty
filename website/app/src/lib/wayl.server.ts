@@ -1,3 +1,5 @@
+import {boundedBytes} from './request-body.server';
+export {boundedBytes} from './request-body.server';
 import type {PaymentProvider,VerifiedPayment} from './checkout.server';
 import type {SharedEnv} from './shared-api.server';
 
@@ -7,13 +9,6 @@ const CHECKOUT='https://checkout.thewayl.com';
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const encoder=new TextEncoder();
 type Link={id:string;referenceId:string;total:string;currency:string;url:string;status:string;createdAt:string;completedAt?:string|null;paymentMethod?:string|null;customParameter?:string;webhookUrl?:string};
-export async function boundedBytes(request:Request|Response,max=16384){
- if(Number(request.headers.get('Content-Length')||0)>max)throw Error('Body too large');
- const reader=request.body?.getReader();if(!reader)return new Uint8Array();
- const parts:Uint8Array[]=[];let size=0;
- try{while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>max){await reader.cancel();throw Error('Body too large')}parts.push(chunk.value)}}finally{reader.releaseLock()}
- const bytes=new Uint8Array(size);let offset=0;for(const part of parts){bytes.set(part,offset);offset+=part.length}return bytes;
-}
 async function hmac(secret:string,value:string){
  const key=await crypto.subtle.importKey('raw',encoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
  return Array.from(new Uint8Array(await crypto.subtle.sign('HMAC',key,encoder.encode(value))),b=>b.toString(16).padStart(2,'0')).join('');

@@ -44,6 +44,8 @@ try {
   for (const route of ["/", "/customer", "/owner", "/privacy", "/terms", "/delete-account", "/support"]) {
     const page = await fetch(origin + route);
     assert.equal(page.status, 200, route);
+    assert.ok(page.headers.get('content-security-policy')?.includes("connect-src 'self'; object-src 'none';"));
+    assert.equal(page.headers.get('referrer-policy'), 'no-referrer');
     const html = await page.text();
     assert.ok(html.includes("مزرعتي"), "Product SSR must render");
     assert.ok(!html.includes("mazraaty-iraq.higgsfield.app"));
@@ -76,7 +78,7 @@ try {
   if (!publicPhoto.ok) throw new Error(`Public R2 photo failed: ${publicPhoto.status} ${await publicPhoto.text()}`);
   assert.equal(publicPhoto.status, 200);
   assert.equal(publicPhoto.headers.get("content-type"), "image/png");
-  assert.equal(publicPhoto.headers.get("cache-control"), "public,max-age=300");
+  assert.equal(publicPhoto.headers.get("cache-control"), "no-store");
   assert.deepEqual(Buffer.from(await publicPhoto.arrayBuffer()), png);
   assert.equal((await call("owner/farms/" + farm.id, "DELETE", undefined, cookie)).status, 200);
   assert.equal((await call(photoPath)).status, 401);

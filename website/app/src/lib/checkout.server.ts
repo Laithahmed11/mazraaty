@@ -96,7 +96,7 @@ export async function dispatchPaymentWhatsApp(env:SharedEnv){
   const current=await db.prepare("SELECT b.phone FROM bookings b JOIN payment_requests p ON p.booking_id=b.id WHERE p.id=? AND b.status='confirmed' AND b.whatsapp_opt_in=1 AND b.phone<>'' AND p.status='awaiting_payment' AND p.expires>?").bind(r.payment_id,seconds()+60).first<{phone:string}>();
   if(!current){await db.prepare("UPDATE whatsapp_payment_outbox SET status='cancelled' WHERE payment_id=?").bind(r.payment_id).run();continue;}
   try{
-   const response=await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:'POST',redirect:'error',headers:{Authorization:'Basic '+btoa(env.TWILIO_ACCOUNT_SID+':'+env.TWILIO_AUTH_TOKEN),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({From:env.TWILIO_WHATSAPP_FROM!,To:'whatsapp:'+current.phone,ContentSid:env.TWILIO_WHATSAPP_TEMPLATE_SID!,ContentVariables:JSON.stringify({'1':r.id,'2':String(r.amount),'3':r.checkout_url}),ValidityPeriod:String(Math.max(1,Math.min(3600,r.expires-seconds()-30)))}),signal:AbortSignal.timeout(15000)});
+   const response=await fetch(`https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`,{method:'POST',redirect:'manual',headers:{Authorization:'Basic '+btoa(env.TWILIO_ACCOUNT_SID+':'+env.TWILIO_AUTH_TOKEN),'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({From:env.TWILIO_WHATSAPP_FROM!,To:'whatsapp:'+current.phone,ContentSid:env.TWILIO_WHATSAPP_TEMPLATE_SID!,ContentVariables:JSON.stringify({'1':r.id,'2':String(r.amount),'3':r.checkout_url}),ValidityPeriod:String(Math.max(1,Math.min(3600,r.expires-seconds()-30)))}),signal:AbortSignal.timeout(15000)});
    const data=await response.json().catch(()=>({})) as {sid?:string};
    const accepted=response.ok&&/^SM[a-f0-9]{32}$/i.test(data.sid||'');
    await db.prepare('UPDATE whatsapp_payment_outbox SET status=?,provider_sid=?,updated_at=? WHERE payment_id=? AND status=\'sending\'').bind(accepted?'accepted':'failed',accepted?data.sid:null,seconds(),r.payment_id).run();
@@ -106,6 +106,7 @@ export async function dispatchPaymentWhatsApp(env:SharedEnv){
 export async function dispatchCheckout(env:SharedEnv){
  if(!env.DB)return;
  await expireBookingHolds(env.DB);
+ await env.DB.prepare("DELETE FROM rate_limits WHERE expires<=?").bind(seconds()).run();
  if(!checkoutReadiness(env).whatsappEnabled)return;
  const bookings=await env.DB.prepare("SELECT id FROM bookings WHERE status='confirmed' AND whatsapp_opt_in=1 AND phone<>'' AND NOT EXISTS(SELECT 1 FROM payment_requests WHERE booking_id=bookings.id) LIMIT 10").all<{id:string}>();
  for(const b of bookings.results){try{await createBookingCheckout(env,b.id)}catch{/* Not an eligible verified booking. */}}

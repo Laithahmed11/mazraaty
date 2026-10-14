@@ -1,4 +1,5 @@
 import type {SharedEnv} from './shared-api.server';
+import {boundedBytes,BodyTooLarge} from './request-body.server';
 export type PushPrincipal={role:'owner'|'customer';principal:string;session:string};
 export const pushHash=async(s:string)=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join('');
 const reply=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
@@ -8,7 +9,7 @@ export async function pushEndpoint(request:Request,env:SharedEnv,identity:PushPr
  if(request.method==='GET'&&path==='status')return reply({enabled:pushReady(env)});
  if(request.headers.get('Origin')!==new URL(request.url).origin)return reply({message:'افتح الطلب من التطبيق الرسمي.'},403);
  if(path!=='device'||!['POST','DELETE'].includes(request.method))return reply({message:'المسار غير موجود.'},404);
- const raw=await request.text();if(raw.length>4096)return reply({message:'حجم الطلب كبير.'},413);
+ let raw:string;try{raw=new TextDecoder('utf-8',{fatal:true}).decode(await boundedBytes(request,4096))}catch(e){return reply({message:e instanceof BodyTooLarge?'حجم الطلب كبير.':'طلب غير صالح.'},e instanceof BodyTooLarge?413:400);}
  let value:{token?:unknown;binding?:unknown;marketing?:unknown};try{value=JSON.parse(raw);}catch{return reply({message:'طلب غير صالح.'},400);}
  if(!value||typeof value.token!=='string'||!/^[-a-zA-Z0-9_:]{20,2048}$/.test(value.token))return reply({message:'معرّف إشعارات غير صالح.'},400);
  const id=await pushHash(value.token);
@@ -37,7 +38,7 @@ async function accessToken(env:SharedEnv){
  const key=await crypto.subtle.importKey('pkcs8',Uint8Array.from(atob(pem),c=>c.charCodeAt(0)),{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign']);
  const jwt=encoded({alg:'RS256',typ:'JWT'})+'.'+encoded({iss:env.FCM_CLIENT_EMAIL,scope:'https://www.googleapis.com/auth/firebase.messaging',aud:'https://oauth2.googleapis.com/token',iat:stamp,exp:stamp+3600});
  const signature=base64(new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(jwt))));
- const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+signature}),signal:AbortSignal.timeout(10000)});
+ const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',redirect:'manual',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+signature}),signal:AbortSignal.timeout(10000)});
  const data=await r.json() as {access_token?:string;expires_in?:number};if(!r.ok||!data.access_token)throw Error('FCM authentication unavailable');
  cached={key:cacheKey,token:data.access_token,expires:stamp+Math.min(data.expires_in||3600,3600)};return cached.token;
 }
@@ -63,7 +64,7 @@ export async function dispatchPush(env:SharedEnv){
   // Recheck immediately before send, including logout/account deletion races.
   const active=await db.prepare("SELECT token_hash FROM push_devices WHERE token_hash=? AND session_id=? AND binding=? AND (?!='offer' OR marketing=1)").bind(row.token_hash,row.session_id,row.binding,row.kind).first();if(!active)continue;
   try{
-   const r=await fetch(`https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`,{method:'POST',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json'},body:JSON.stringify({message:{token:row.token,data:{binding:row.binding,eventId:row.event_id,bookingId:row.booking_id,kind:row.kind,role:row.role,title:row.title,body:row.body,expires:String(stamp+900)},android:{priority:'high',ttl:'900s'}}}),signal:AbortSignal.timeout(10000)});
+   const r=await fetch(`https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`,{method:'POST',redirect:'manual',headers:{Authorization:'Bearer '+bearer,'Content-Type':'application/json'},body:JSON.stringify({message:{token:row.token,data:{binding:row.binding,eventId:row.event_id,bookingId:row.booking_id,kind:row.kind,role:row.role,title:row.title,body:row.body,expires:String(stamp+900)},android:{priority:'high',ttl:'900s'}}}),signal:AbortSignal.timeout(10000)});
    if(r.ok)await db.prepare('UPDATE push_deliveries SET sent=1 WHERE event_id=? AND token_hash=?').bind(row.event_id,row.token_hash).run();
    else{const value=await r.json().catch(()=>({})) as {error?:{details?:{errorCode?:string}[]}};if(value.error?.details?.some(d=>d.errorCode==='UNREGISTERED'))await db.prepare('DELETE FROM push_devices WHERE token_hash=?').bind(row.token_hash).run();else if(r.status===401)cached=undefined;}
   }catch{console.warn('Push delivery deferred');}

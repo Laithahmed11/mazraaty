@@ -84,7 +84,7 @@ test("R2 photo upload, private preview, published access and hidden-farm privacy
     const publicPhoto = await call(path);
     expect(publicPhoto.status).toBe(200);
     expect(publicPhoto.headers.get("Content-Type")).toBe("image/png");
-    expect(publicPhoto.headers.get("Cache-Control")).toBe("public,max-age=300");
+    expect(publicPhoto.headers.get("Cache-Control")).toBe("no-store");
     expect(new Uint8Array(await publicPhoto.arrayBuffer())).toEqual(png);
     expect((await call("owner/farms/" + saved.farm.id, "DELETE", undefined, cookie)).status).toBe(200);
     expect((await call(path)).status).toBe(401);
