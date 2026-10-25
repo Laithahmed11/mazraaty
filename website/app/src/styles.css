@@ -1,4 +1,5 @@
 @import "./mazraaty.css";
+@import "./customer-theme.css";
 /* Cascade layer order: reset lowest, then Tailwind/Quanta base, then
  * components and finally utilities — so Quanta's q-* utilities (e.g.
  * q-button-*) always win over global element resets. */
